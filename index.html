@@ -207,6 +207,22 @@ html[data-theme="light"] .btn{color:#fff}
 .toast.err{border-color:var(--danger)}
 @keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ============================ PARTIDOS ============================ */
+.step{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:7px 10px;margin-top:6px}
+.step .lbl{flex:1;font-size:13px;font-weight:700;min-width:0}
+.step button{width:32px;height:32px;border-radius:8px;background:var(--surface2);font-size:17px;font-weight:800;flex:none;display:flex;align-items:center;justify-content:center}
+.step .val{font-weight:800;min-width:22px;text-align:center}
+.mp-row{width:100%;text-align:left;display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-top:7px}
+.mp-row .nm{flex:1;min-width:0;font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-row .mm{font-size:12.5px;color:var(--muted);font-weight:700;flex:none}
+.mp-sub{font-size:12px;color:var(--muted);margin-top:2px;font-weight:600}
+.mp-exp{background:var(--bg);border:1px solid var(--accent);border-radius:11px;padding:10px 12px;margin-top:7px}
+.tit-chip{flex:none;font-size:12px;font-weight:800;border-radius:8px;padding:5px 10px;background:var(--surface2);color:var(--muted)}
+.tit-chip.on{background:var(--accent-dim);color:var(--accent)}
+.cambio-line{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:8px 2px;border-bottom:1px dashed var(--border)}
+.cambio-line .cl-txt{flex:1;min-width:0}
+.cambio-line button{color:var(--danger);font-size:15px;flex:none}
+
 /* ============================ PLANILLA PRUEBAS ============================ */
 .res-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .res-row .nm{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -241,12 +257,7 @@ html[data-theme="light"] .btn{color:#fff}
 
   <!-- ══════════════ PESTAÑA PARTIDOS ══════════════ -->
   <section class="tab" id="tab-partidos">
-    <div class="card">
-      <h3>⚽ Partidos</h3>
-      <p class="hint">Planilla de partido: titulares, cambios (quién entra y quién
-      sale, con el minuto), goles, asistencias, tarjetas y faltas.
-      <b>Llega en una etapa próxima.</b></p>
-    </div>
+    <div id="partidosContent"></div>
   </section>
 
   <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
@@ -371,6 +382,16 @@ html[data-theme="light"] .btn{color:#fff}
     <button class="icon-btn" onclick="sessionDelete()" title="Borrar jornada">🗑</button>
   </div>
   <div id="sessionBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY PARTIDO ══════════════ -->
+<div class="overlay" id="ovMatch">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeMatch()">←</button>
+    <h2>Partido</h2>
+    <button class="icon-btn" onclick="matchDelete()" title="Borrar partido">🗑</button>
+  </div>
+  <div id="matchBody"></div>
 </div>
 
 <!-- ══════════════ OVERLAY GESTOR DE PRUEBAS ══════════════ -->
@@ -623,6 +644,7 @@ function switchTab(t){
   if (nb) nb.classList.add('active');
   document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
   if (t === 'pruebas') renderPruebas();
+  if (t === 'partidos') renderPartidos();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
@@ -671,12 +693,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -701,7 +723,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1369,6 +1391,278 @@ function renderEvolution(p){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/matches.js ===== Partidos: planilla, cambios y minutos
+   ═══════════════════════════════════════════════════════════════════ */
+let matchOpenId = null;
+let matchExpandedPid = null;   // jugador con panel de estadísticas abierto
+let cambioFormOpen = false;
+
+const MATCH_STATS = [
+  ['g','⚽ Goles'], ['a','🅰️ Asistencias'], ['am','🟨 Amarillas'],
+  ['r','🟥 Roja'], ['fc','🦵 Faltas cometidas'], ['fr','🤕 Faltas recibidas']
+];
+const STAT_MAX = { am:2, r:1 };
+
+function curMatch(){ return S.matches.find(m => m.id === matchOpenId) || null; }
+function matchStats(m, pid){ return (m.stats && m.stats[pid]) || {}; }
+function participantsOf(m){
+  const set = {};
+  (m.titulares || []).forEach(pid => set[pid] = 1);
+  (m.cambios || []).forEach(c => set[c.entra] = 1);
+  return set;
+}
+function onFieldNow(m){
+  const set = {};
+  (m.titulares || []).forEach(pid => set[pid] = 1);
+  (m.cambios || []).slice().sort((a, b) => a.min - b.min).forEach(c => {
+    delete set[c.sale];
+    set[c.entra] = 1;
+  });
+  return set;
+}
+// Minutos jugados: se DERIVAN de titulares + cambios + duración del partido.
+function minutosDe(m, pid){
+  const dur = m.duracion || 60;
+  let start = null, mins = 0;
+  if ((m.titulares || []).includes(pid)) start = 0;
+  (m.cambios || []).slice().sort((a, b) => a.min - b.min).forEach(c => {
+    const t = Math.max(0, Math.min(Number(c.min) || 0, dur));
+    if (c.entra === pid && start === null) start = t;
+    if (c.sale === pid && start !== null){ mins += Math.max(0, t - start); start = null; }
+  });
+  if (start !== null) mins += Math.max(0, dur - start);
+  return mins;
+}
+function playerName(pid){
+  const p = S.players.find(x => x.id === pid);
+  return p ? p.nombre + ' ' + (p.apellido || '') : 'Jugador borrado';
+}
+
+/* --- pestaña Partidos --- */
+function renderPartidos(){
+  const box = document.getElementById('partidosContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">⚽</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    return;
+  }
+  const matches = S.matches.filter(m => m.teamId === t.id)
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  let html = '<div class="btn-row" style="margin:0 0 12px">' +
+    '<button class="btn" onclick="matchCreate()">➕ Nuevo partido</button></div>';
+  if (!matches.length){
+    html += '<div class="empty"><div class="big">📝</div>Sin partidos todavía en <b>' + esc(t.nombre) + '</b>.<br><br>' +
+      'Cargá un partido: quiénes juegan, los cambios<br>(los minutos se calculan solos), goles,<br>asistencias, tarjetas y faltas.</div>';
+  } else {
+    html += matches.map(m => {
+      const res = (m.golesFavor != null && m.golesContra != null) ? m.golesFavor + ' - ' + m.golesContra : 'sin resultado';
+      const n = Object.keys(participantsOf(m)).length;
+      return '<button class="player-card" onclick="openMatch(\'' + m.id + '\')">' +
+        '<div class="avatar">⚽</div>' +
+        '<div class="pc-info"><div class="pc-name">vs ' + esc(m.rival || 'Rival') + '</div>' +
+        '<div class="pc-sub">' + fmtFecha(m.fecha) + ' · ' + res + ' · ' + n + ' jugaron</div></div>' +
+        '</button>';
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+function matchCreate(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  const prev = S.matches.filter(m => m.teamId === t.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
+  const m = {
+    id:uid(), teamId:t.id, fecha:todayISO(), rival:'',
+    golesFavor:null, golesContra:null,
+    duracion:(prev && prev.duracion) || 60,
+    titulares:[], cambios:[], stats:{}
+  };
+  S.matches.push(m);
+  saveData();
+  openMatch(m.id);
+}
+function openMatch(id){
+  matchOpenId = id;
+  matchExpandedPid = null;
+  cambioFormOpen = false;
+  renderMatch();
+  openOverlay('ovMatch');
+}
+function closeMatch(){
+  closeOverlay('ovMatch');
+  matchOpenId = null;
+  renderPartidos();
+}
+function matchField(k, v){
+  const m = curMatch();
+  if (!m) return;
+  if (k === 'fecha'){ if (v) m.fecha = v; }
+  else if (k === 'rival') m.rival = String(v).trim();
+  else if (k === 'duracion'){ const n = Number(v); m.duracion = (n > 0 ? n : 60); }
+  else if (k === 'gf' || k === 'gc'){
+    const n = v === '' ? null : Number(v);
+    m[k === 'gf' ? 'golesFavor' : 'golesContra'] = (n === null || isNaN(n) || n < 0) ? null : n;
+  }
+  saveData();
+  if (k === 'duracion') renderMatch();   // cambia los minutos calculados
+}
+async function matchDelete(){
+  const m = curMatch();
+  if (!m) return;
+  const ok = await appConfirm('Borrar partido',
+    '¿Borrar el partido vs "' + (m.rival || 'Rival') + '" del ' + fmtFecha(m.fecha) + ' con toda su planilla?',
+    { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.matches = S.matches.filter(x => x.id !== m.id);
+  saveData();
+  closeMatch();
+}
+function toggleTitular(pid){
+  const m = curMatch();
+  if (!m) return;
+  const i = (m.titulares || []).indexOf(pid);
+  if (i >= 0) m.titulares.splice(i, 1);
+  else {
+    if ((m.cambios || []).some(c => c.entra === pid)){ toast('Ya entra al partido por un cambio', true); return; }
+    m.titulares.push(pid);
+  }
+  saveData();
+  renderMatch();
+}
+function toggleCambioForm(){ cambioFormOpen = !cambioFormOpen; renderMatch(); }
+function addCambio(){
+  const m = curMatch();
+  if (!m) return;
+  const min = Number(document.getElementById('cbMin').value);
+  const sale = document.getElementById('cbSale').value;
+  const entra = document.getElementById('cbEntra').value;
+  if (isNaN(min) || min < 0 || min > (m.duracion || 60)){ toast('Minuto inválido (0 a ' + (m.duracion || 60) + ')', true); return; }
+  if (!sale || !entra){ toast('Elegí quién sale y quién entra', true); return; }
+  if (sale === entra){ toast('No puede salir y entrar el mismo jugador', true); return; }
+  m.cambios.push({ min:min, sale:sale, entra:entra });
+  cambioFormOpen = false;
+  saveData();
+  renderMatch();
+}
+function delCambio(idx){
+  const m = curMatch();
+  if (!m || !m.cambios[idx]) return;
+  m.cambios.splice(idx, 1);
+  saveData();
+  renderMatch();
+}
+function toggleMp(pid){
+  matchExpandedPid = (matchExpandedPid === pid) ? null : pid;
+  renderMatch();
+}
+function statAdj(pid, k, d){
+  const m = curMatch();
+  if (!m) return;
+  m.stats = m.stats || {};
+  m.stats[pid] = m.stats[pid] || {};
+  let v = Number(m.stats[pid][k] || 0) + d;
+  if (v < 0) v = 0;
+  if (STAT_MAX[k] !== undefined && v > STAT_MAX[k]) v = STAT_MAX[k];
+  m.stats[pid][k] = v;
+  saveData();
+  renderMatch();
+}
+function renderMatch(){
+  const m = curMatch();
+  if (!m) return;
+  const dur = m.duracion || 60;
+  const players = teamPlayers(m.teamId)
+    .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  const parts = participantsOf(m);
+  const onField = onFieldNow(m);
+
+  /* Datos */
+  let html =
+    '<div class="card"><h3>📋 Datos del partido</h3><div class="form-grid">' +
+      '<div><label style="margin-top:6px">Fecha</label><input type="date" value="' + esc(m.fecha) + '" onchange="matchField(\'fecha\', this.value)"></div>' +
+      '<div><label style="margin-top:6px">Duración (min)</label><input type="number" inputmode="numeric" min="1" value="' + esc(dur) + '" onchange="matchField(\'duracion\', this.value)"></div>' +
+      '<div class="full"><label>Rival</label><input value="' + esc(m.rival) + '" onchange="matchField(\'rival\', this.value)" placeholder="Nombre del rival" autocomplete="off"></div>' +
+      '<div><label>Goles nuestros</label><input type="number" inputmode="numeric" min="0" value="' + (m.golesFavor != null ? m.golesFavor : '') + '" onchange="matchField(\'gf\', this.value)"></div>' +
+      '<div><label>Goles rival</label><input type="number" inputmode="numeric" min="0" value="' + (m.golesContra != null ? m.golesContra : '') + '" onchange="matchField(\'gc\', this.value)"></div>' +
+    '</div></div>';
+
+  /* Titulares */
+  if (!players.length){
+    html += '<div class="card"><h3>👥 Equipo</h3><p class="hint">No hay jugadores en este equipo todavía: cargalos en la pestaña Jugadores.</p></div>';
+  } else {
+    html += '<div class="card"><h3>👥 Titulares (' + (m.titulares || []).length + ')</h3>' +
+      '<p class="hint">Tocá para marcar quién arranca el partido. Los que entran después se cargan como cambio.</p>' +
+      players.map(p => {
+        const tit = (m.titulares || []).includes(p.id);
+        const entra = (m.cambios || []).find(c => c.entra === p.id);
+        const right = tit
+          ? '<span class="tit-chip on">Titular</span>'
+          : (entra ? '<span class="tit-chip">entra ' + esc(entra.min) + '′</span>' : '<span class="tit-chip">—</span>');
+        return '<button class="mp-row" onclick="toggleTitular(\'' + p.id + '\')"><div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' + right + '</button>';
+      }).join('') + '</div>';
+  }
+
+  /* Cambios */
+  const cambiosOrd = (m.cambios || []).slice().sort((a, b) => a.min - b.min);
+  html += '<div class="card"><h3>🔄 Cambios</h3>';
+  if (cambiosOrd.length){
+    html += cambiosOrd.map(c => {
+      const idx = m.cambios.indexOf(c);
+      return '<div class="cambio-line"><div class="cl-txt"><b>' + esc(c.min) + '′</b> &nbsp;🔻 ' + esc(playerName(c.sale)) + ' &nbsp;🔺 ' + esc(playerName(c.entra)) + '</div>' +
+        '<button onclick="delCambio(' + idx + ')" title="Borrar cambio">✕</button></div>';
+    }).join('');
+  } else {
+    html += '<p class="hint">Sin cambios cargados.</p>';
+  }
+  if (cambioFormOpen){
+    const enCancha = players.filter(p => onField[p.id]);
+    const afuera = players.filter(p => !onField[p.id]);
+    html += '<label>Minuto</label><input type="number" id="cbMin" inputmode="numeric" min="0" max="' + dur + '" placeholder="Ej: 55">' +
+      '<label>Sale 🔻</label><select id="cbSale">' + enCancha.map(p => '<option value="' + p.id + '">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</option>').join('') + '</select>' +
+      '<label>Entra 🔺</label><select id="cbEntra">' + afuera.map(p => '<option value="' + p.id + '">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</option>').join('') + '</select>' +
+      '<div class="btn-row"><button class="btn sec" onclick="toggleCambioForm()">Cancelar</button><button class="btn" onclick="addCambio()">Agregar cambio</button></div>';
+  } else {
+    html += '<div class="btn-row"><button class="btn sec" onclick="toggleCambioForm()">＋ Cargar cambio</button></div>';
+  }
+  html += '</div>';
+
+  /* Planilla de los que jugaron */
+  const jugaron = players.filter(p => parts[p.id]);
+  html += '<div class="card"><h3>📝 Planilla (' + jugaron.length + ' jugaron)</h3>';
+  if (!jugaron.length){
+    html += '<p class="hint">Marcá titulares o cargá cambios y acá aparecen los que jugaron, para anotarles goles, tarjetas y faltas. Los minutos se calculan solos.</p>';
+  } else {
+    html += '<p class="hint">Tocá un jugador para anotarle goles, asistencias, tarjetas y faltas.</p>';
+    html += jugaron.map(p => {
+      const st = matchStats(m, p.id);
+      const mini = [];
+      if (st.g) mini.push('⚽' + st.g);
+      if (st.a) mini.push('🅰️' + st.a);
+      if (st.am) mini.push('🟨' + st.am);
+      if (st.r) mini.push('🟥');
+      if (st.fc) mini.push('FC ' + st.fc);
+      if (st.fr) mini.push('FR ' + st.fr);
+      let row = '<button class="mp-row" onclick="toggleMp(\'' + p.id + '\')">' +
+        '<div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) +
+        (mini.length ? '<div class="mp-sub">' + mini.join(' · ') + '</div>' : '') + '</div>' +
+        '<div class="mm">' + minutosDe(m, p.id) + '′</div></button>';
+      if (matchExpandedPid === p.id){
+        row += '<div class="mp-exp">' + MATCH_STATS.map(sd =>
+          '<div class="step"><div class="lbl">' + sd[1] + '</div>' +
+          '<button onclick="statAdj(\'' + p.id + '\',\'' + sd[0] + '\',-1)">−</button>' +
+          '<div class="val">' + Number(st[sd[0]] || 0) + '</div>' +
+          '<button onclick="statAdj(\'' + p.id + '\',\'' + sd[0] + '\',1)">＋</button></div>'
+        ).join('') + '</div>';
+      }
+      return row;
+    }).join('');
+  }
+  html += '</div>';
+
+  document.getElementById('matchBody').innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -1397,7 +1691,7 @@ function importBackupFile(ev){
       S.matches = S.matches || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers(); renderPruebas();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
