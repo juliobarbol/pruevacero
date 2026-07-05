@@ -2,36 +2,1007 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0f172a">
 <title>PruevaCero</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+// Tema antes del primer pintado (evita flash)
+(function(){
+  var t = 'dark';
+  try { t = localStorage.getItem('pc_theme') || 'dark'; } catch(e){}
+  document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text);
-    min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:20px;
-  }
-  .card {
-    background: var(--card); border-radius:16px; padding:36px 28px; max-width:420px; width:100%;
-    text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.35);
-  }
-  .ball { font-size:56px; }
-  h1 { margin:14px 0 6px; font-size:28px; letter-spacing:.5px; }
-  p { color: var(--muted); line-height:1.5; }
-  .badge {
-    display:inline-block; margin-top:18px; padding:6px 14px; border-radius:999px;
-    background:rgba(34,197,94,.15); color:var(--accent); font-size:13px; font-weight:600;
-  }
+/* ============================ VARIABLES ============================ */
+:root{
+  --bg:#0f172a; --surface:#1e293b; --surface2:#27354a; --border:#334155;
+  --text:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; --accent-dim:rgba(34,197,94,.15);
+  --danger:#ef4444; --warn:#f59e0b; --info:#38bdf8;
+  --radius:14px; --nav-h:60px;
+}
+html[data-theme="light"]{
+  --bg:#f1f5f9; --surface:#ffffff; --surface2:#e2e8f0; --border:#cbd5e1;
+  --text:#0f172a; --muted:#64748b; --accent:#16a34a; --accent-dim:rgba(22,163,74,.12);
+}
+/* ============================ BASE ============================ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg); color:var(--text); -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{
+  font:inherit;color:var(--text);background:var(--bg);
+  border:1px solid var(--border);border-radius:10px;padding:10px 12px;width:100%;
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 5px;font-weight:600}
+h2{font-size:19px;margin-bottom:4px}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.45}
+
+/* ============================ HEADER ============================ */
+header{
+  position:sticky;top:0;z-index:20;background:var(--bg);
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
+  display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);
+}
+.brand{font-size:17px;font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+.team-pill{
+  flex:1;min-width:0;display:flex;align-items:center;gap:8px;justify-content:center;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;
+  padding:8px 14px;font-weight:700;font-size:14.5px;
+}
+.team-pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team-pill .caret{color:var(--muted);font-size:11px}
+.icon-btn{
+  width:40px;height:40px;border-radius:12px;background:var(--surface);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none;
+}
+
+/* ============================ LAYOUT / TABS ============================ */
+main{padding:14px 14px calc(var(--nav-h) + 26px + env(safe-area-inset-bottom))}
+.tab{display:none}
+.tab.active{display:block}
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;height:calc(var(--nav-h) + env(safe-area-inset-bottom));
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:10.5px;font-weight:700;color:var(--muted);
+}
+nav button .ic{font-size:20px}
+nav button.active{color:var(--accent)}
+
+/* ============================ CARDS / LISTA ============================ */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;margin-bottom:12px;
+}
+.card h3{font-size:15.5px;margin-bottom:6px}
+.player-card{
+  display:flex;align-items:center;gap:12px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:9px;
+  width:100%;text-align:left;
+}
+.avatar{
+  width:44px;height:44px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  background:var(--accent-dim);color:var(--accent);font-weight:800;font-size:15px;
+}
+.pc-info{flex:1;min-width:0}
+.pc-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-sub{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-cat{
+  flex:none;font-size:12px;font-weight:800;color:var(--accent);
+  background:var(--accent-dim);border-radius:8px;padding:4px 8px;
+}
+.empty{
+  text-align:center;padding:44px 18px;color:var(--muted);
+}
+.empty .big{font-size:46px;margin-bottom:10px}
+
+/* ============================ TOOLBAR / CHIPS ============================ */
+.toolbar{display:flex;gap:8px;margin-bottom:10px}
+.toolbar input{flex:1}
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:none;padding:7px 13px;border-radius:999px;background:var(--surface);
+  border:1px solid var(--border);font-size:13px;font-weight:700;color:var(--muted);
+}
+.chip.on{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+
+/* ============================ BOTONES ============================ */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  background:var(--accent);color:#fff;font-weight:800;font-size:14.5px;
+  border-radius:12px;padding:12px 18px;width:100%;
+}
+html[data-theme="light"] .btn{color:#fff}
+.btn.sec{background:var(--surface2);color:var(--text)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.mini{width:auto;padding:8px 13px;font-size:13px;border-radius:10px}
+.btn-row{display:flex;gap:9px;margin-top:12px}
+.btn-row .btn{flex:1}
+.fab{
+  position:fixed;right:16px;bottom:calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));z-index:19;
+  background:var(--accent);color:#fff;font-size:26px;font-weight:700;
+  width:56px;height:56px;border-radius:50%;box-shadow:0 6px 18px rgba(0,0,0,.35);
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* ============================ OVERLAYS ============================ */
+.overlay{
+  position:fixed;inset:0;z-index:30;background:var(--bg);display:none;
+  overflow-y:auto;padding:0 14px calc(30px + env(safe-area-inset-bottom));
+}
+.overlay.open{display:block}
+.ov-head{
+  position:sticky;top:0;z-index:5;background:var(--bg);
+  display:flex;align-items:center;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top)) 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;
+}
+.ov-head h2{flex:1;font-size:18px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.form-grid .full{grid-column:1/-1}
+
+/* ============================ FICHA ============================ */
+.ficha-hero{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.ficha-hero .avatar{width:62px;height:62px;font-size:21px}
+.ficha-hero h2{font-size:21px}
+.ficha-hero .sub{color:var(--muted);font-size:13.5px;margin-top:3px}
+.datagrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.datagrid.tri{grid-template-columns:1fr 1fr 1fr}
+.dg-item{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:9px 11px}
+.dg-item .k{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.dg-item .v{font-size:14.5px;font-weight:700;margin-top:2px;word-break:break-word}
+.histline{display:flex;justify-content:space-between;font-size:13px;padding:6px 2px;border-bottom:1px dashed var(--border);color:var(--muted)}
+.histline b{color:var(--text)}
+.med-row{display:flex;gap:8px;align-items:flex-end;margin-top:10px}
+.med-row>div{flex:1}
+.med-row .btn{flex:none;width:auto}
+
+/* ============================ EQUIPOS ============================ */
+.team-item{
+  display:flex;align-items:center;gap:10px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;margin-bottom:9px;
+}
+.team-item.on{border-color:var(--accent)}
+.team-item .t-main{flex:1;min-width:0;text-align:left}
+.team-item .t-name{font-weight:800;font-size:15px}
+.team-item .t-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.t-act{display:flex;gap:6px}
+.t-act button{
+  width:36px;height:36px;border-radius:10px;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;font-size:15px;
+}
+
+/* ============================ MODAL (confirm / prompt) ============================ */
+.modal-bg{
+  position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);display:none;
+  align-items:center;justify-content:center;padding:22px;
+}
+.modal-bg.open{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:20px;width:100%;max-width:340px;
+}
+.modal h3{font-size:16.5px;margin-bottom:8px}
+.modal p{font-size:14px;color:var(--muted);line-height:1.5}
+.modal input{margin-top:12px}
+
+/* ============================ TOAST ============================ */
+#toasts{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + 18px + env(safe-area-inset-bottom));z-index:60;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toast{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  border-radius:12px;padding:11px 18px;font-size:14px;font-weight:600;max-width:88%;
+  box-shadow:0 8px 22px rgba(0,0,0,.35);animation:tin .2s ease;
+}
+.toast.err{border-color:var(--danger)}
+@keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+
+@media(min-width:700px){
+  main,.overlay{max-width:640px;margin:0 auto}
+  header{padding-left:calc(50% - 306px);padding-right:calc(50% - 306px)}
+}
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="ball">⚽</div>
-    <h1>PruevaCero</h1>
-    <p>App de análisis y seguimiento de jugadores de fútbol.</p>
-    <div class="badge">🚧 En construcción</div>
+
+<header>
+  <div class="brand">⚽</div>
+  <button class="team-pill" onclick="openTeamOverlay()">
+    <span id="teamPillName">Sin equipo</span><span class="caret">▼</span>
+  </button>
+  <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Tema">🌙</button>
+</header>
+
+<main>
+  <!-- ══════════════ PESTAÑA JUGADORES ══════════════ -->
+  <section class="tab active" id="tab-jugadores">
+    <div id="jugContent"></div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA PRUEBAS ══════════════ -->
+  <section class="tab" id="tab-pruebas">
+    <div class="card">
+      <h3>💪 Pruebas físicas</h3>
+      <p class="hint">Acá vas a poder crear tus propias pruebas (fuerza, velocidad,
+      salto, lo que quieras), armar jornadas de evaluación y ver la evolución de
+      cada jugador. <b>Llega en la próxima etapa.</b></p>
+    </div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA PARTIDOS ══════════════ -->
+  <section class="tab" id="tab-partidos">
+    <div class="card">
+      <h3>⚽ Partidos</h3>
+      <p class="hint">Planilla de partido: titulares, cambios (quién entra y quién
+      sale, con el minuto), goles, asistencias, tarjetas y faltas.
+      <b>Llega en una etapa próxima.</b></p>
+    </div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
+  <section class="tab" id="tab-stats">
+    <div class="card">
+      <h3>📊 Estadísticas</h3>
+      <p class="hint">Promedios y porcentajes automáticos por jugador: minutos,
+      goles y asistencias por partido, frecuencia de tarjetas y tabla comparativa
+      del plantel. <b>Llega en una etapa próxima.</b></p>
+    </div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA CONFIG ══════════════ -->
+  <section class="tab" id="tab-config">
+    <div class="card">
+      <h3>🏟️ Equipos</h3>
+      <p class="hint">Creá un equipo por cada grupo al que le des clases. Los
+      jugadores viven dentro de su equipo y se pueden mover entre ellos.</p>
+      <div class="btn-row"><button class="btn sec" onclick="openTeamOverlay()">Gestionar equipos</button></div>
+    </div>
+    <div class="card">
+      <h3>💾 Copia de seguridad</h3>
+      <p class="hint">Los datos viven en este dispositivo. Exportá la copia cada
+      tanto (equipos, jugadores y todo lo demás en un archivo) y guardala donde
+      quieras. Importarla reemplaza TODO lo actual.</p>
+      <div class="btn-row">
+        <button class="btn sec" onclick="exportBackup()">⬇️ Exportar</button>
+        <button class="btn sec" onclick="document.getElementById('fileBackup').click()">⬆️ Importar</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>👤 Importar jugador</h3>
+      <p class="hint">Trae la ficha de un jugador exportada desde otra instalación
+      de PruevaCero y la agrega al equipo activo.</p>
+      <div class="btn-row"><button class="btn sec" onclick="document.getElementById('filePlayer').click()">📥 Importar ficha</button></div>
+    </div>
+    <div class="card">
+      <h3>🎨 Apariencia</h3>
+      <div class="btn-row"><button class="btn sec" onclick="toggleTheme()">Cambiar tema claro / oscuro</button></div>
+    </div>
+    <div class="card">
+      <h3>ℹ️ PruevaCero</h3>
+      <p class="hint">App de análisis y seguimiento de jugadores de fútbol.
+      Funciona sin internet; instalala desde el menú del navegador
+      ("Agregar a pantalla de inicio"). Versión: Etapa 1.</p>
+    </div>
+  </section>
+</main>
+
+<button class="fab" id="fabAdd" onclick="openPlayerForm()" style="display:none">＋</button>
+
+<nav>
+  <button class="active" id="nav-jugadores" onclick="switchTab('jugadores')"><span class="ic">👤</span>Jugadores</button>
+  <button id="nav-pruebas" onclick="switchTab('pruebas')"><span class="ic">💪</span>Pruebas</button>
+  <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
+  <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
+  <button id="nav-config" onclick="switchTab('config')"><span class="ic">⚙️</span>Config</button>
+</nav>
+
+<!-- ══════════════ OVERLAY EQUIPOS ══════════════ -->
+<div class="overlay" id="ovTeams">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovTeams')">←</button>
+    <h2>Mis equipos</h2>
   </div>
+  <div id="teamsList"></div>
+  <button class="btn" onclick="teamCreate()">➕ Nuevo equipo</button>
+  <p class="hint" style="margin-top:12px">Tocá un equipo para trabajar con él.
+  ✏️ cambia el nombre; 🗑 lo borra (solo si no tiene jugadores).</p>
+</div>
+
+<!-- ══════════════ OVERLAY FORM JUGADOR ══════════════ -->
+<div class="overlay" id="ovPlayerForm">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovPlayerForm')">←</button>
+    <h2 id="pfTitle">Nuevo jugador</h2>
+  </div>
+  <div class="form-grid">
+    <div><label>Nombre *</label><input id="pfNombre" autocomplete="off"></div>
+    <div><label>Apellido</label><input id="pfApellido" autocomplete="off"></div>
+    <div class="full"><label>Fecha de nacimiento</label><input id="pfNac" type="date"></div>
+    <div><label>Pie hábil</label>
+      <select id="pfPie"><option value="">—</option><option value="derecho">Derecho</option><option value="izquierdo">Izquierdo</option><option value="ambos">Ambos</option></select></div>
+    <div><label>Mano hábil</label>
+      <select id="pfMano"><option value="">—</option><option value="derecha">Derecha</option><option value="izquierda">Izquierda</option><option value="ambas">Ambas</option></select></div>
+    <div class="full"><label>Ojo hábil</label>
+      <select id="pfOjo"><option value="">—</option><option value="derecho">Derecho</option><option value="izquierdo">Izquierdo</option><option value="ambos">Ambos</option></select></div>
+    <div><label>Peso (kg)</label><input id="pfPeso" type="number" inputmode="decimal" min="0" step="0.1"></div>
+    <div><label>Altura (cm)</label><input id="pfAltura" type="number" inputmode="decimal" min="0" step="0.5"></div>
+    <div class="full"><label>Años practicando fútbol</label><input id="pfAnios" type="number" inputmode="numeric" min="0" step="1"></div>
+    <div class="full"><label>Otros deportes (separados por coma)</label><input id="pfOtros" placeholder="natación, básquet…" autocomplete="off"></div>
+    <div><label>Línea</label>
+      <select id="pfLinea" onchange="pfLineaChange()">
+        <option value="">—</option><option value="arquero">Arquero</option>
+        <option value="defensor">Defensor</option><option value="medio">Mediocampista</option>
+        <option value="atacante">Atacante</option>
+      </select></div>
+    <div><label>Puesto</label><select id="pfRol"><option value="">—</option></select></div>
+    <div class="full"><label>Notas</label><textarea id="pfNotas" rows="3"></textarea></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn sec" onclick="closeOverlay('ovPlayerForm')">Cancelar</button>
+    <button class="btn" onclick="savePlayer()">Guardar</button>
+  </div>
+</div>
+
+<!-- ══════════════ OVERLAY FICHA ══════════════ -->
+<div class="overlay" id="ovFicha">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovFicha')">←</button>
+    <h2>Ficha del jugador</h2>
+    <button class="icon-btn" onclick="fichaEdit()" title="Editar">✏️</button>
+  </div>
+  <div id="fichaBody"></div>
+</div>
+
+<!-- ══════════════ MODAL confirm/prompt ══════════════ -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <p id="mMsg"></p>
+    <input id="mInput" style="display:none" autocomplete="off">
+    <div class="btn-row">
+      <button class="btn sec" id="mCancel">Cancelar</button>
+      <button class="btn" id="mOk">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+<input type="file" id="fileBackup" accept=".json,application/json" style="display:none" onchange="importBackupFile(event)">
+<input type="file" id="filePlayer" accept=".json,application/json" style="display:none" onchange="importPlayerFile(event)">
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/state.js ===== Estado global, persistencia y helpers
+   ═══════════════════════════════════════════════════════════════════ */
+const LS = { DATA:'pc_data', THEME:'pc_theme', UI:'pc_ui' };
+
+// Pruebas precargadas (el creador de pruebas de la Etapa 2 las usa de base)
+const DEF_TESTDEFS = [
+  { id:'t_fpiernas', nombre:'Fuerza piernas', unidad:'kg',    tipo:'numero', mejorEs:'mayor' },
+  { id:'t_fpecho',   nombre:'Fuerza pecho',   unidad:'kg',    tipo:'numero', mejorEs:'mayor' },
+  { id:'t_fespalda', nombre:'Fuerza espalda', unidad:'kg',    tipo:'numero', mejorEs:'mayor' },
+  { id:'t_1000m',    nombre:'1000 metros',    unidad:'min:seg', tipo:'tiempo', mejorEs:'menor' },
+  { id:'t_yoyo',     nombre:'Test Yo-Yo',     unidad:'nivel', tipo:'numero', mejorEs:'mayor' },
+  { id:'t_sprint10', nombre:'Sprint 10 m',    unidad:'seg',   tipo:'numero', mejorEs:'menor' },
+  { id:'t_sprint30', nombre:'Sprint 30 m',    unidad:'seg',   tipo:'numero', mejorEs:'menor' },
+  { id:'t_tobillo',  nombre:'Flexibilidad de tobillo', unidad:'cm', tipo:'numero', mejorEs:'mayor' },
+  { id:'t_slargo',   nombre:'Salto en largo', unidad:'cm',    tipo:'numero', mejorEs:'mayor' },
+  { id:'t_salto',    nombre:'Salto en alto',  unidad:'cm',    tipo:'numero', mejorEs:'mayor' }
+];
+
+const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', atacante:'Atacante' };
+const ROLES = {
+  arquero: [],
+  defensor: [['central','Central'],['lateral','Lateral']],
+  medio: [['recuperacion','De recuperación'],['creacion','De creación']],
+  atacante: [['centroatacante','Centroatacante'],['extremo','Extremo']]
+};
+
+let S  = loadData();   // datos (equipos, jugadores, pruebas…)
+let UI = loadUI();     // interfaz (equipo activo, pestaña)
+
+function loadData(){
+  try {
+    const raw = localStorage.getItem(LS.DATA);
+    if (raw){
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.teams)) {
+        d.players      = d.players      || [];
+        d.testDefs     = d.testDefs     || DEF_TESTDEFS.slice();
+        d.testSessions = d.testSessions || [];
+        d.matches      = d.matches      || [];
+        return d;
+      }
+    }
+  } catch(e){}
+  return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[] };
+}
+function loadUI(){
+  try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
+  return {};
+}
+function safeSetLS(k, v){
+  try { localStorage.setItem(k, v); return true; }
+  catch(e){ toast('⚠️ No se pudo guardar (memoria llena)', true); return false; }
+}
+function saveData(){ safeSetLS(LS.DATA, JSON.stringify(S)); }
+function saveUI(){ safeSetLS(LS.UI, JSON.stringify(UI)); }
+
+/* --- helpers --- */
+function uid(){ return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtFecha(iso){
+  if (!iso) return '—';
+  const p = String(iso).split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : iso;
+}
+function edad(nacISO){
+  if (!nacISO) return null;
+  const p = String(nacISO).split('-').map(Number);
+  if (p.length !== 3 || !p[0]) return null;
+  const hoy = new Date();
+  let e = hoy.getFullYear() - p[0];
+  if ((hoy.getMonth()+1) < p[1] || ((hoy.getMonth()+1) === p[1] && hoy.getDate() < p[2])) e--;
+  return e;
+}
+function catOf(pl){
+  if (!pl.nacimiento) return null;
+  return String(pl.nacimiento).split('-')[0] || null;
+}
+function posLabel(pl){
+  const l = pl.posicion && pl.posicion.linea;
+  if (!l) return null;
+  let t = LINEAS[l] || l;
+  const rol = pl.posicion.rol;
+  if (rol){
+    const rr = (ROLES[l] || []).find(r => r[0] === rol);
+    if (rr) t += ' ' + rr[1].toLowerCase();
+  }
+  return t;
+}
+function lastOf(arr){ return (arr && arr.length) ? arr[arr.length-1] : null; }
+function toast(msg, isErr){
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast' + (isErr ? ' err' : '');
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+function download(name, text){
+  const blob = new Blob([text], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 300);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/modal.js ===== Confirmación y texto propios (sin prompt())
+   ═══════════════════════════════════════════════════════════════════ */
+let _mResolve = null;
+function _modalOpen(opts){
+  return new Promise(resolve => {
+    _mResolve = resolve;
+    document.getElementById('mTitle').textContent = opts.title || '';
+    document.getElementById('mMsg').textContent = opts.msg || '';
+    const inp = document.getElementById('mInput');
+    if (opts.input){
+      inp.style.display = 'block';
+      inp.value = opts.value || '';
+      inp.placeholder = opts.placeholder || '';
+    } else inp.style.display = 'none';
+    const ok = document.getElementById('mOk');
+    ok.textContent = opts.okLabel || 'Aceptar';
+    ok.className = 'btn' + (opts.danger ? ' danger' : '');
+    document.getElementById('modalBg').classList.add('open');
+    if (opts.input) setTimeout(() => inp.focus(), 60);
+  });
+}
+function _modalClose(val){
+  document.getElementById('modalBg').classList.remove('open');
+  if (_mResolve){ _mResolve(val); _mResolve = null; }
+}
+function appConfirm(title, msg, opts){
+  opts = opts || {};
+  return _modalOpen({ title, msg, okLabel:opts.okLabel, danger:opts.danger }).then(v => v !== null);
+}
+function appPromptText(title, msg, value, placeholder){
+  return _modalOpen({ title, msg, input:true, value, placeholder });
+}
+document.getElementById('mCancel').onclick = () => _modalClose(null);
+document.getElementById('mOk').onclick = () => {
+  const inp = document.getElementById('mInput');
+  _modalClose(inp.style.display === 'none' ? true : inp.value.trim());
+};
+document.getElementById('mInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('mOk').click();
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/ui.js ===== Tema, pestañas, overlays
+   ═══════════════════════════════════════════════════════════════════ */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem(LS.THEME, t); } catch(e){}
+  document.getElementById('themeBtn').textContent = (t === 'dark') ? '🌙' : '☀️';
+  const mc = document.querySelector('meta[name="theme-color"]');
+  if (mc) mc.setAttribute('content', t === 'dark' ? '#0f172a' : '#f1f5f9');
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+function switchTab(t){
+  UI.tab = t; saveUI();
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
+  const sec = document.getElementById('tab-' + t);
+  if (sec) sec.classList.add('active');
+  const nb = document.getElementById('nav-' + t);
+  if (nb) nb.classList.add('active');
+  document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
+  window.scrollTo(0, 0);
+}
+function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
+function openOverlay(id){ document.getElementById(id).classList.add('open'); window.scrollTo(0,0); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/teams.js ===== Equipos: crear, elegir, renombrar, borrar
+   ═══════════════════════════════════════════════════════════════════ */
+function activeTeam(){
+  return S.teams.find(t => t.id === UI.teamId) || null;
+}
+function teamPlayers(teamId){
+  return S.players.filter(p => p.teamId === teamId);
+}
+function renderTeamBar(){
+  const t = activeTeam();
+  document.getElementById('teamPillName').textContent = t ? t.nombre : 'Sin equipo';
+}
+function openTeamOverlay(){
+  renderTeams();
+  openOverlay('ovTeams');
+}
+function renderTeams(){
+  const box = document.getElementById('teamsList');
+  if (!S.teams.length){
+    box.innerHTML = '<div class="empty"><div class="big">🏟️</div>Todavía no creaste ningún equipo.<br>Empezá con el botón de abajo.</div>';
+    return;
+  }
+  box.innerHTML = S.teams.map(t => {
+    const n = teamPlayers(t.id).length;
+    return '<div class="team-item' + (t.id === UI.teamId ? ' on' : '') + '">' +
+      '<button class="t-main" onclick="teamPick(\'' + t.id + '\')">' +
+        '<div class="t-name">' + esc(t.nombre) + (t.id === UI.teamId ? ' ✓' : '') + '</div>' +
+        '<div class="t-sub">' + n + ' jugador' + (n === 1 ? '' : 'es') + '</div>' +
+      '</button>' +
+      '<div class="t-act">' +
+        '<button onclick="teamRename(\'' + t.id + '\')" title="Renombrar">✏️</button>' +
+        '<button onclick="teamDelete(\'' + t.id + '\')" title="Borrar">🗑</button>' +
+      '</div></div>';
+  }).join('');
+}
+async function teamCreate(){
+  const name = await appPromptText('Nuevo equipo', 'Nombre del equipo (club y/o categoría):', '', 'Ej: Defensores 2012');
+  if (!name) return;
+  const t = { id:uid(), nombre:name, creado:todayISO() };
+  S.teams.push(t);
+  UI.teamId = t.id;
+  saveData(); saveUI();
+  renderTeams(); renderTeamBar(); renderPlayers();
+  toast('Equipo "' + name + '" creado');
+}
+function teamPick(id){
+  UI.teamId = id; saveUI();
+  renderTeamBar(); renderPlayers(); renderTeams();
+  closeOverlay('ovTeams');
+  switchTab('jugadores');
+}
+async function teamRename(id){
+  const t = S.teams.find(x => x.id === id);
+  if (!t) return;
+  const name = await appPromptText('Renombrar equipo', '', t.nombre);
+  if (!name) return;
+  t.nombre = name;
+  saveData();
+  renderTeams(); renderTeamBar();
+}
+async function teamDelete(id){
+  const t = S.teams.find(x => x.id === id);
+  if (!t) return;
+  if (teamPlayers(id).length){
+    toast('El equipo tiene jugadores: movelos o borralos antes', true);
+    return;
+  }
+  const ok = await appConfirm('Borrar equipo', '¿Borrar "' + t.nombre + '"? Esta acción no se puede deshacer.', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.teams = S.teams.filter(x => x.id !== id);
+  if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
+  saveData(); saveUI();
+  renderTeams(); renderTeamBar(); renderPlayers();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/players.js ===== Jugadores: lista, ficha, alta/edición
+   ═══════════════════════════════════════════════════════════════════ */
+let jugSearch = '';
+let jugLinea = '';
+let editingId = null;   // jugador en edición en el form
+let fichaId = null;     // jugador abierto en la ficha
+
+function renderPlayers(){
+  const box = document.getElementById('jugContent');
+  const t = activeTeam();
+  document.getElementById('fabAdd').style.display = (UI.tab === 'jugadores' && t) ? 'flex' : 'none';
+
+  if (!t){
+    box.innerHTML =
+      '<div class="empty"><div class="big">⚽</div>' +
+      '<h2 style="margin-bottom:8px">¡Bienvenido a PruevaCero!</h2>' +
+      '<p class="hint" style="margin-bottom:18px">Para arrancar, creá tu primer equipo.<br>Después le cargás los jugadores.</p>' +
+      '<button class="btn" style="max-width:260px" onclick="teamCreate()">➕ Crear mi primer equipo</button></div>';
+    return;
+  }
+
+  const chips = ['', 'arquero', 'defensor', 'medio', 'atacante'].map(l =>
+    '<button class="chip' + (jugLinea === l ? ' on' : '') + '" onclick="setLineaFilter(\'' + l + '\')">' +
+    (l ? LINEAS[l] + 's' : 'Todos') + '</button>'
+  ).join('');
+
+  let list = teamPlayers(t.id);
+  const q = jugSearch.trim().toLowerCase();
+  if (q) list = list.filter(p => (p.nombre + ' ' + (p.apellido || '')).toLowerCase().includes(q));
+  if (jugLinea) list = list.filter(p => p.posicion && p.posicion.linea === jugLinea);
+  list.sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre, 'es'));
+
+  let html =
+    '<div class="toolbar"><input placeholder="🔍 Buscar jugador…" value="' + esc(jugSearch) + '" oninput="jugSearchInput(this.value)"></div>' +
+    '<div class="chips">' + chips + '</div>';
+
+  if (!teamPlayers(t.id).length){
+    html += '<div class="empty"><div class="big">👤</div>Todavía no hay jugadores en <b>' + esc(t.nombre) + '</b>.<br>Agregá el primero con el botón ＋.</div>';
+  } else if (!list.length){
+    html += '<div class="empty">No hay jugadores que coincidan con la búsqueda.</div>';
+  } else {
+    html += list.map(p => {
+      const ini = (p.nombre[0] || '') + ((p.apellido || '')[0] || '');
+      const e = edad(p.nacimiento);
+      const partes = [];
+      if (e != null) partes.push(e + ' años');
+      const pos = posLabel(p);
+      if (pos) partes.push(pos);
+      if (!p.nacimiento) partes.push('⚠️ falta fecha de nac.');
+      const cat = catOf(p);
+      return '<button class="player-card" onclick="openFicha(\'' + p.id + '\')">' +
+        '<div class="avatar">' + esc(ini.toUpperCase() || '?') + '</div>' +
+        '<div class="pc-info"><div class="pc-name">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' +
+        '<div class="pc-sub">' + esc(partes.join(' · ') || 'Sin datos') + '</div></div>' +
+        (cat ? '<div class="pc-cat">' + esc(cat) + '</div>' : '') +
+        '</button>';
+    }).join('');
+    html += '<p class="hint" style="text-align:center;margin-top:6px">' + list.length + ' jugador' + (list.length === 1 ? '' : 'es') + '</p>';
+  }
+  box.innerHTML = html;
+}
+function jugSearchInput(v){ jugSearch = v; renderPlayers(); const inp = document.querySelector('#jugContent .toolbar input'); if (inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
+function setLineaFilter(l){ jugLinea = l; renderPlayers(); }
+
+/* --- formulario alta / edición --- */
+function pfLineaChange(){
+  const l = document.getElementById('pfLinea').value;
+  const sel = document.getElementById('pfRol');
+  const roles = ROLES[l] || [];
+  sel.innerHTML = '<option value="">—</option>' + roles.map(r => '<option value="' + r[0] + '">' + r[1] + '</option>').join('');
+  sel.disabled = !roles.length;
+}
+function openPlayerForm(id){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  editingId = id || null;
+  const p = id ? S.players.find(x => x.id === id) : null;
+  document.getElementById('pfTitle').textContent = p ? 'Editar jugador' : 'Nuevo jugador';
+  document.getElementById('pfNombre').value = p ? p.nombre : '';
+  document.getElementById('pfApellido').value = p ? (p.apellido || '') : '';
+  document.getElementById('pfNac').value = p ? (p.nacimiento || '') : '';
+  document.getElementById('pfPie').value = p ? (p.lateralidad.pie || '') : '';
+  document.getElementById('pfMano').value = p ? (p.lateralidad.mano || '') : '';
+  document.getElementById('pfOjo').value = p ? (p.lateralidad.ojo || '') : '';
+  const peso = p ? lastOf(p.fisico.peso) : null;
+  const alt  = p ? lastOf(p.fisico.altura) : null;
+  document.getElementById('pfPeso').value = peso ? peso.kg : '';
+  document.getElementById('pfAltura').value = alt ? alt.cm : '';
+  document.getElementById('pfAnios').value = p ? (p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '') : '';
+  document.getElementById('pfOtros').value = p ? (p.antecedentes.otrosDeportes || '') : '';
+  document.getElementById('pfLinea').value = p ? (p.posicion.linea || '') : '';
+  pfLineaChange();
+  document.getElementById('pfRol').value = p ? (p.posicion.rol || '') : '';
+  document.getElementById('pfNotas').value = p ? (p.notas || '') : '';
+  openOverlay('ovPlayerForm');
+}
+function savePlayer(){
+  const nombre = document.getElementById('pfNombre').value.trim();
+  if (!nombre){ toast('Falta el nombre', true); return; }
+  const t = activeTeam();
+  if (!t){ toast('No hay equipo activo', true); return; }
+
+  let p = editingId ? S.players.find(x => x.id === editingId) : null;
+  if (!p){
+    p = {
+      id: uid(), teamId: t.id,
+      nombre:'', apellido:'', nacimiento:'',
+      lateralidad:{ pie:'', mano:'', ojo:'' },
+      fisico:{ peso:[], altura:[] },
+      antecedentes:{ aniosPractica:null, otrosDeportes:'' },
+      posicion:{ linea:'', rol:'' },
+      historialEquipos:[{ teamId:t.id, desde:todayISO(), hasta:null }],
+      lesiones:[], objetivos:[], notas:'', creado:todayISO()
+    };
+    S.players.push(p);
+  }
+  p.nombre = nombre;
+  p.apellido = document.getElementById('pfApellido').value.trim();
+  p.nacimiento = document.getElementById('pfNac').value || '';
+  p.lateralidad.pie = document.getElementById('pfPie').value;
+  p.lateralidad.mano = document.getElementById('pfMano').value;
+  p.lateralidad.ojo = document.getElementById('pfOjo').value;
+  const anios = document.getElementById('pfAnios').value;
+  p.antecedentes.aniosPractica = anios === '' ? null : Number(anios);
+  p.antecedentes.otrosDeportes = document.getElementById('pfOtros').value.trim();
+  const linea = document.getElementById('pfLinea').value;
+  p.posicion.linea = linea;
+  p.posicion.rol = linea ? document.getElementById('pfRol').value : '';
+  p.notas = document.getElementById('pfNotas').value.trim();
+
+  // Peso / altura: si cambió el valor, se agrega una medición con fecha de hoy
+  const peso = document.getElementById('pfPeso').value;
+  const alt  = document.getElementById('pfAltura').value;
+  const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
+  if (peso !== '' && (!lp || Number(peso) !== lp.kg)) p.fisico.peso.push({ fecha:todayISO(), kg:Number(peso) });
+  if (alt  !== '' && (!la || Number(alt)  !== la.cm)) p.fisico.altura.push({ fecha:todayISO(), cm:Number(alt) });
+
+  saveData();
+  closeOverlay('ovPlayerForm');
+  renderPlayers();
+  if (fichaId === p.id && document.getElementById('ovFicha').classList.contains('open')) openFicha(p.id);
+  toast(editingId ? 'Jugador actualizado' : 'Jugador agregado');
+  editingId = null;
+}
+
+/* --- ficha --- */
+function dgi(k, v){ return '<div class="dg-item"><div class="k">' + k + '</div><div class="v">' + (v || '—') + '</div></div>'; }
+function openFicha(id){
+  const p = S.players.find(x => x.id === id);
+  if (!p) return;
+  fichaId = id;
+  const e = edad(p.nacimiento);
+  const cat = catOf(p);
+  const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
+  const otros = p.antecedentes.otrosDeportes;
+  const otherTeams = S.teams.filter(t => t.id !== p.teamId);
+
+  const histFis = p.fisico.peso.slice(-5).reverse().map(m =>
+      '<div class="histline"><span>' + fmtFecha(m.fecha) + '</span><b>' + m.kg + ' kg</b></div>').join('') +
+    p.fisico.altura.slice(-5).reverse().map(m =>
+      '<div class="histline"><span>' + fmtFecha(m.fecha) + '</span><b>' + m.cm + ' cm</b></div>').join('');
+
+  const histEq = (p.historialEquipos || []).slice().reverse().map(h => {
+    const tt = S.teams.find(x => x.id === h.teamId);
+    return '<div class="histline"><span>' + esc(tt ? tt.nombre : 'Equipo borrado') + '</span>' +
+      '<b>' + fmtFecha(h.desde) + (h.hasta ? ' → ' + fmtFecha(h.hasta) : ' → hoy') + '</b></div>';
+  }).join('');
+
+  document.getElementById('fichaBody').innerHTML =
+    '<div class="ficha-hero">' +
+      '<div class="avatar">' + esc(((p.nombre[0] || '') + ((p.apellido || '')[0] || '')).toUpperCase() || '?') + '</div>' +
+      '<div><h2>' + esc(p.nombre + ' ' + (p.apellido || '')) + '</h2>' +
+      '<div class="sub">' + (cat ? 'Categoría ' + esc(cat) + ' · ' : '') + (e != null ? e + ' años' : 'sin fecha de nacimiento') + '</div></div>' +
+    '</div>' +
+
+    '<div class="card"><h3>📋 Datos</h3><div class="datagrid">' +
+      dgi('Nacimiento', esc(fmtFecha(p.nacimiento))) +
+      dgi('Posición', esc(posLabel(p) || '')) +
+    '</div></div>' +
+
+    '<div class="card"><h3>🦶 Lateralidad</h3><div class="datagrid tri">' +
+      dgi('Pie', esc(p.lateralidad.pie)) + dgi('Mano', esc(p.lateralidad.mano)) + dgi('Ojo', esc(p.lateralidad.ojo)) +
+    '</div></div>' +
+
+    '<div class="card"><h3>📏 Físico</h3><div class="datagrid">' +
+      dgi('Peso', lp ? lp.kg + ' kg' : '') + dgi('Altura', la ? la.cm + ' cm' : '') +
+    '</div>' +
+    '<div class="med-row">' +
+      '<div><label style="margin-top:0">Peso (kg)</label><input id="medPeso" type="number" inputmode="decimal" min="0" step="0.1"></div>' +
+      '<div><label style="margin-top:0">Altura (cm)</label><input id="medAltura" type="number" inputmode="decimal" min="0" step="0.5"></div>' +
+      '<button class="btn mini" onclick="addMedicion()">＋</button>' +
+    '</div>' +
+    (histFis ? '<label>Historial (últimas mediciones)</label>' + histFis : '') +
+    '</div>' +
+
+    '<div class="card"><h3>🏃 Antecedentes deportivos</h3><div class="datagrid">' +
+      dgi('Años de fútbol', p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '') +
+      dgi('Otros deportes', esc(otros)) +
+    '</div></div>' +
+
+    (p.notas ? '<div class="card"><h3>📝 Notas</h3><p class="hint" style="white-space:pre-wrap">' + esc(p.notas) + '</p></div>' : '') +
+
+    '<div class="card"><h3>🏟️ Equipo</h3>' + histEq +
+    (otherTeams.length ?
+      '<label>Mover a otro equipo</label>' +
+      '<div class="med-row" style="margin-top:0">' +
+        '<div><select id="moveSel">' + otherTeams.map(t => '<option value="' + t.id + '">' + esc(t.nombre) + '</option>').join('') + '</select></div>' +
+        '<button class="btn mini" onclick="movePlayer()">Mover</button>' +
+      '</div>' : '<p class="hint" style="margin-top:8px">Creá otro equipo para poder moverlo.</p>') +
+    '</div>' +
+
+    '<div class="btn-row"><button class="btn sec" onclick="exportPlayer()">📤 Exportar ficha</button></div>' +
+    '<div class="btn-row"><button class="btn danger" onclick="deletePlayerAsk()">🗑 Eliminar jugador</button></div>';
+
+  openOverlay('ovFicha');
+}
+function fichaEdit(){ if (fichaId){ openPlayerForm(fichaId); } }
+function addMedicion(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  const peso = document.getElementById('medPeso').value;
+  const alt = document.getElementById('medAltura').value;
+  if (peso === '' && alt === ''){ toast('Cargá peso y/o altura', true); return; }
+  if (peso !== '') p.fisico.peso.push({ fecha:todayISO(), kg:Number(peso) });
+  if (alt !== '') p.fisico.altura.push({ fecha:todayISO(), cm:Number(alt) });
+  saveData();
+  openFicha(fichaId);
+  toast('Medición registrada');
+}
+async function movePlayer(){
+  const p = S.players.find(x => x.id === fichaId);
+  const sel = document.getElementById('moveSel');
+  if (!p || !sel) return;
+  const dest = S.teams.find(t => t.id === sel.value);
+  if (!dest) return;
+  const ok = await appConfirm('Mover jugador',
+    '¿Pasar a ' + p.nombre + ' ' + (p.apellido || '') + ' al equipo "' + dest.nombre + '"? Se lleva toda su ficha e historial.',
+    { okLabel:'Mover' });
+  if (!ok) return;
+  const cur = lastOf(p.historialEquipos || []);
+  if (cur && !cur.hasta) cur.hasta = todayISO();
+  p.historialEquipos = p.historialEquipos || [];
+  p.historialEquipos.push({ teamId:dest.id, desde:todayISO(), hasta:null });
+  p.teamId = dest.id;
+  saveData();
+  closeOverlay('ovFicha');
+  renderPlayers();
+  toast('Movido a "' + dest.nombre + '"');
+}
+function exportPlayer(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  const payload = { _app:'PruevaCero', _type:'pc_player_v1', _version:1, _exportedAt:new Date().toISOString(), player:p };
+  const fn = ('jugador-' + p.nombre + '-' + (p.apellido || '')).replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ-]+/g, '-') + '.json';
+  download(fn, JSON.stringify(payload, null, 2));
+  toast('Ficha exportada');
+}
+async function deletePlayerAsk(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  const ok = await appConfirm('Eliminar jugador',
+    '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + '? Se pierde su ficha completa. Si puede volver, conviene "Exportar ficha" antes.',
+    { okLabel:'Eliminar', danger:true });
+  if (!ok) return;
+  S.players = S.players.filter(x => x.id !== fichaId);
+  saveData();
+  closeOverlay('ovFicha');
+  renderPlayers();
+  toast('Jugador eliminado');
+}
+function importPlayerFile(ev){
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  const t = activeTeam();
+  if (!t){ toast('Primero creá/elegí un equipo', true); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const j = JSON.parse(rd.result);
+      if (!j || j._type !== 'pc_player_v1' || !j.player || !j.player.nombre) throw 0;
+      const p = j.player;
+      if (S.players.some(x => x.id === p.id)) p.id = uid();
+      const cur = lastOf(p.historialEquipos || []);
+      if (cur && !cur.hasta) cur.hasta = todayISO();
+      p.historialEquipos = p.historialEquipos || [];
+      p.historialEquipos.push({ teamId:t.id, desde:todayISO(), hasta:null });
+      p.teamId = t.id;
+      p.fisico = p.fisico || { peso:[], altura:[] };
+      p.lateralidad = p.lateralidad || { pie:'', mano:'', ojo:'' };
+      p.antecedentes = p.antecedentes || { aniosPractica:null, otrosDeportes:'' };
+      p.posicion = p.posicion || { linea:'', rol:'' };
+      S.players.push(p);
+      saveData();
+      switchTab('jugadores');
+      renderPlayers();
+      toast(p.nombre + ' importado a "' + t.nombre + '"');
+    } catch(e){
+      toast('El archivo no es una ficha de PruevaCero', true);
+    }
+  };
+  rd.readAsText(f);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/backup.js ===== Copia de seguridad completa
+   ═══════════════════════════════════════════════════════════════════ */
+function exportBackup(){
+  const payload = { _app:'PruevaCero', _type:'pc_backup_v1', _version:1, _exportedAt:new Date().toISOString(), data:S };
+  download('pruevacero-backup-' + todayISO() + '.json', JSON.stringify(payload, null, 2));
+  toast('Copia de seguridad descargada');
+}
+function importBackupFile(ev){
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    try {
+      const j = JSON.parse(rd.result);
+      if (!j || j._type !== 'pc_backup_v1' || !j.data || !Array.isArray(j.data.teams)) throw 0;
+      const ok = await appConfirm('Importar copia',
+        'Esto REEMPLAZA todos los datos actuales (' + S.teams.length + ' equipos, ' + S.players.length +
+        ' jugadores) por los del archivo (' + j.data.teams.length + ' equipos, ' + (j.data.players || []).length + ' jugadores). ¿Seguir?',
+        { okLabel:'Reemplazar', danger:true });
+      if (!ok) return;
+      S = j.data;
+      S.players = S.players || [];
+      S.testDefs = S.testDefs || DEF_TESTDEFS.slice();
+      S.testSessions = S.testSessions || [];
+      S.matches = S.matches || [];
+      UI.teamId = S.teams.length ? S.teams[0].id : null;
+      saveData(); saveUI();
+      renderTeamBar(); renderPlayers();
+      toast('Copia importada');
+    } catch(e){
+      if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
+    }
+  };
+  rd.readAsText(f);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/core.js ===== Arranque + PWA
+   ═══════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Equipo activo válido
+  if (UI.teamId && !S.teams.some(t => t.id === UI.teamId)) UI.teamId = null;
+  if (!UI.teamId && S.teams.length) UI.teamId = S.teams[0].id;
+
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  renderTeamBar();
+  renderPlayers();
+  switchTab(UI.tab && document.getElementById('tab-' + UI.tab) ? UI.tab : 'jugadores');
+
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+});
+</script>
 </body>
 </html>
