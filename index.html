@@ -207,6 +207,11 @@ html[data-theme="light"] .btn{color:#fff}
 .toast.err{border-color:var(--danger)}
 @keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ============================ PLANILLA PRUEBAS ============================ */
+.res-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.res-row .nm{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-row input{width:120px;flex:none;text-align:center}
+
 @media(min-width:700px){
   main,.overlay{max-width:640px;margin:0 auto}
   header{padding-left:calc(50% - 306px);padding-right:calc(50% - 306px)}
@@ -231,12 +236,7 @@ html[data-theme="light"] .btn{color:#fff}
 
   <!-- ══════════════ PESTAÑA PRUEBAS ══════════════ -->
   <section class="tab" id="tab-pruebas">
-    <div class="card">
-      <h3>💪 Pruebas físicas</h3>
-      <p class="hint">Acá vas a poder crear tus propias pruebas (fuerza, velocidad,
-      salto, lo que quieras), armar jornadas de evaluación y ver la evolución de
-      cada jugador. <b>Llega en la próxima etapa.</b></p>
-    </div>
+    <div id="pruebasContent"></div>
   </section>
 
   <!-- ══════════════ PESTAÑA PARTIDOS ══════════════ -->
@@ -361,6 +361,66 @@ html[data-theme="light"] .btn{color:#fff}
     <button class="icon-btn" onclick="fichaEdit()" title="Editar">✏️</button>
   </div>
   <div id="fichaBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY JORNADA DE PRUEBAS ══════════════ -->
+<div class="overlay" id="ovSession">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeSession()">←</button>
+    <h2>Jornada de pruebas</h2>
+    <button class="icon-btn" onclick="sessionDelete()" title="Borrar jornada">🗑</button>
+  </div>
+  <div id="sessionBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY GESTOR DE PRUEBAS ══════════════ -->
+<div class="overlay" id="ovTests">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovTests')">←</button>
+    <h2>Mis pruebas</h2>
+  </div>
+  <div id="testsList"></div>
+  <button class="btn" onclick="openTestForm()">➕ Nueva prueba</button>
+  <p class="hint" style="margin-top:12px">Las pruebas se definen una sola vez y
+  quedan guardadas para elegirlas rápido en cualquier jornada. Las que ya tienen
+  resultados no se borran: se archivan.</p>
+</div>
+
+<!-- ══════════════ OVERLAY AGREGAR PRUEBA A LA JORNADA ══════════════ -->
+<div class="overlay" id="ovTestPick">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovTestPick')">←</button>
+    <h2>Agregar prueba</h2>
+  </div>
+  <div id="testPickList"></div>
+  <button class="btn sec" onclick="openTestForm(null, true)">➕ Crear prueba nueva</button>
+</div>
+
+<!-- ══════════════ OVERLAY FORM PRUEBA ══════════════ -->
+<div class="overlay" id="ovTestForm">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovTestForm')">←</button>
+    <h2 id="tfTitle">Nueva prueba</h2>
+  </div>
+  <label>Nombre *</label><input id="tfNombre" placeholder="Ej: Sprint 50 m" autocomplete="off">
+  <label>Unidad</label><input id="tfUnidad" placeholder="kg, seg, cm, nivel, reps…" autocomplete="off">
+  <label>Tipo de dato</label>
+  <select id="tfTipo" onchange="tfTipoChange()">
+    <option value="numero">Número (kg, cm, seg…)</option>
+    <option value="tiempo">Tiempo (min:seg)</option>
+    <option value="texto">Texto libre</option>
+  </select>
+  <div id="tfMejorWrap">
+    <label>¿Qué resultado es mejor?</label>
+    <select id="tfMejor">
+      <option value="mayor">Mayor (más es mejor: fuerza, salto…)</option>
+      <option value="menor">Menor (menos es mejor: sprint, 1000 m…)</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="btn sec" onclick="closeOverlay('ovTestForm')">Cancelar</button>
+    <button class="btn" onclick="saveTestDef()">Guardar</button>
+  </div>
 </div>
 
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
@@ -562,6 +622,7 @@ function switchTab(t){
   const nb = document.getElementById('nav-' + t);
   if (nb) nb.classList.add('active');
   document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
+  if (t === 'pruebas') renderPruebas();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
@@ -610,12 +671,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -640,7 +701,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -844,6 +905,8 @@ function openFicha(id){
       dgi('Otros deportes', esc(otros)) +
     '</div></div>' +
 
+    renderEvolution(p) +
+
     (p.notas ? '<div class="card"><h3>📝 Notas</h3><p class="hint" style="white-space:pre-wrap">' + esc(p.notas) + '</p></div>' : '') +
 
     '<div class="card"><h3>🏟️ Equipo</h3>' + histEq +
@@ -949,6 +1012,363 @@ function importPlayerFile(ev){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/tests.js ===== Pruebas físicas: creador de pruebas + jornadas
+   ═══════════════════════════════════════════════════════════════════ */
+let sessionOpenId = null;      // jornada abierta
+let sessionTestId = null;      // prueba activa en la planilla
+let testFormEditId = null;     // prueba en edición en el form
+let testFormFromSession = false;
+
+function testDefById(id){ return S.testDefs.find(d => d.id === id); }
+function testUsage(defId){
+  return S.testSessions.filter(s =>
+    (s.pruebas || []).includes(defId) ||
+    Object.keys(s.resultados || {}).some(pid => s.resultados[pid] && s.resultados[pid][defId] !== undefined)
+  ).length;
+}
+function parseTiempo(str){
+  str = String(str).trim().replace(',', '.');
+  if (!str) return null;
+  if (str.includes(':')){
+    const p = str.split(':');
+    const m = Number(p[0]) || 0, s = Number(p[1]) || 0;
+    if (isNaN(m) || isNaN(s)) return null;
+    return m * 60 + s;
+  }
+  const n = Number(str);
+  return isNaN(n) ? null : n;
+}
+function fmtTiempo(sec){
+  sec = Number(sec) || 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.round((sec - m * 60) * 10) / 10;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+function fmtTestVal(def, v){
+  if (v === undefined || v === null || v === '') return '—';
+  if (def.tipo === 'tiempo') return fmtTiempo(v);
+  if (def.tipo === 'texto') return esc(String(v));
+  return v + (def.unidad ? ' ' + esc(def.unidad) : '');
+}
+function testSub(d){
+  const tipo = d.tipo === 'tiempo' ? 'tiempo' : (d.tipo === 'texto' ? 'texto' : 'número');
+  return esc((d.unidad ? d.unidad + ' · ' : '') + tipo +
+    (d.tipo !== 'texto' ? ' · mejor: ' + (d.mejorEs === 'menor' ? 'menor' : 'mayor') : ''));
+}
+
+/* --- pestaña Pruebas --- */
+function renderPruebas(){
+  const box = document.getElementById('pruebasContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">💪</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    return;
+  }
+  const sessions = S.testSessions.filter(s => s.teamId === t.id)
+    .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  let html =
+    '<div class="btn-row" style="margin:0 0 12px">' +
+      '<button class="btn" onclick="sessionCreate()">➕ Nueva jornada</button>' +
+      '<button class="btn sec" onclick="openTestsManager()">🛠 Mis pruebas</button>' +
+    '</div>';
+  if (!sessions.length){
+    html += '<div class="empty"><div class="big">📋</div>Sin jornadas todavía en <b>' + esc(t.nombre) + '</b>.<br><br>' +
+      'Una jornada es un día de pruebas: elegís qué medir<br>y cargás los resultados jugador por jugador.</div>';
+  } else {
+    html += sessions.map(s => {
+      const defs = (s.pruebas || []).map(id => testDefById(id)).filter(Boolean);
+      const nJug = Object.keys(s.resultados || {}).filter(pid => Object.keys(s.resultados[pid] || {}).length).length;
+      const names = defs.slice(0, 3).map(d => esc(d.nombre)).join(', ') + (defs.length > 3 ? '…' : '');
+      return '<button class="player-card" onclick="openSession(\'' + s.id + '\')">' +
+        '<div class="avatar">📋</div>' +
+        '<div class="pc-info"><div class="pc-name">' + fmtFecha(s.fecha) + '</div>' +
+        '<div class="pc-sub">' + (defs.length ? names : 'Sin pruebas elegidas') + '</div></div>' +
+        '<div class="pc-cat">👤 ' + nJug + '</div></button>';
+    }).join('');
+  }
+  box.innerHTML = html;
+}
+
+/* --- jornadas --- */
+function curSession(){ return S.testSessions.find(s => s.id === sessionOpenId) || null; }
+function sessionCreate(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  const s = { id:uid(), teamId:t.id, fecha:todayISO(), pruebas:[], resultados:{} };
+  S.testSessions.push(s);
+  saveData();
+  openSession(s.id);
+}
+function openSession(id){
+  sessionOpenId = id;
+  const s = curSession();
+  if (!s) return;
+  if (!sessionTestId || !(s.pruebas || []).includes(sessionTestId)) sessionTestId = (s.pruebas || [])[0] || null;
+  renderSession();
+  openOverlay('ovSession');
+}
+function closeSession(){
+  closeOverlay('ovSession');
+  sessionOpenId = null;
+  renderPruebas();
+}
+function sessionFecha(v){
+  const s = curSession();
+  if (!s || !v) return;
+  s.fecha = v;
+  saveData();
+}
+function sessionPlayers(s){
+  // Jugadores del equipo + los que ya tienen resultados en esta jornada
+  // (aunque se hayan movido de equipo después).
+  const conDatos = {};
+  Object.keys(s.resultados || {}).forEach(pid => conDatos[pid] = 1);
+  const list = S.players.filter(p => p.teamId === s.teamId || conDatos[p.id]);
+  list.sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  return list;
+}
+function renderSession(){
+  const s = curSession();
+  if (!s) return;
+  const chips = (s.pruebas || []).map(idd => {
+    const d = testDefById(idd);
+    return '<button class="chip' + (idd === sessionTestId ? ' on' : '') + '" onclick="setSessionTest(\'' + idd + '\')">' + esc(d ? d.nombre : '?') + '</button>';
+  }).join('') + '<button class="chip" onclick="openTestPick()">＋ Prueba</button>';
+
+  let planilla = '';
+  const def = sessionTestId ? testDefById(sessionTestId) : null;
+  if (def){
+    const players = sessionPlayers(s);
+    planilla = '<p class="hint" style="margin:2px 0 12px">Cargando <b>' + esc(def.nombre) + '</b>' +
+      (def.unidad ? ' (' + esc(def.unidad) + ')' : '') +
+      (def.tipo !== 'texto' ? ' · mejor: ' + (def.mejorEs === 'menor' ? 'menor' : 'mayor') : '') +
+      (def.tipo === 'tiempo' ? ' · formato min:seg (ej. 4:35)' : '') + '</p>';
+    if (!players.length){
+      planilla += '<div class="empty">No hay jugadores en este equipo todavía.</div>';
+    } else {
+      planilla += players.map(p => {
+        const val = (s.resultados[p.id] || {})[def.id];
+        let shown = '';
+        if (val !== undefined && val !== null && val !== '') shown = (def.tipo === 'tiempo') ? fmtTiempo(val) : String(val);
+        const attrs = def.tipo === 'numero'
+          ? 'type="number" inputmode="decimal" step="0.01"'
+          : 'type="text"' + (def.tipo === 'tiempo' ? ' inputmode="numeric" placeholder="4:35"' : '');
+        return '<div class="res-row"><div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' +
+          '<input ' + attrs + ' value="' + esc(shown) + '" onchange="resIn(\'' + p.id + '\', this.value)"></div>';
+      }).join('');
+      planilla += '<div class="btn-row"><button class="btn sec" onclick="sessionRemoveTest()">Quitar esta prueba de la jornada</button></div>';
+    }
+  } else {
+    planilla = '<div class="empty"><div class="big">🛠</div>Agregá una prueba con el botón "＋ Prueba"<br>y cargá los resultados jugador por jugador.<br><br>Los resultados se guardan solos al escribirlos.</div>';
+  }
+
+  document.getElementById('sessionBody').innerHTML =
+    '<label style="margin-top:0">Fecha de la jornada</label>' +
+    '<input type="date" value="' + esc(s.fecha) + '" onchange="sessionFecha(this.value)" style="margin-bottom:12px">' +
+    '<div class="chips">' + chips + '</div>' + planilla;
+}
+function setSessionTest(id){ sessionTestId = id; renderSession(); }
+function resIn(pid, val){
+  const s = curSession();
+  const def = sessionTestId ? testDefById(sessionTestId) : null;
+  if (!s || !def) return;
+  val = String(val).trim();
+  if (val === ''){
+    if (s.resultados[pid]){
+      delete s.resultados[pid][def.id];
+      if (!Object.keys(s.resultados[pid]).length) delete s.resultados[pid];
+    }
+    saveData();
+    return;
+  }
+  let v;
+  if (def.tipo === 'tiempo'){
+    v = parseTiempo(val);
+    if (v === null){ toast('Tiempo inválido: usá min:seg (ej. 4:35)', true); renderSession(); return; }
+  } else if (def.tipo === 'numero'){
+    v = Number(val.replace(',', '.'));
+    if (isNaN(v)){ toast('Valor inválido', true); renderSession(); return; }
+  } else v = val;
+  s.resultados[pid] = s.resultados[pid] || {};
+  s.resultados[pid][def.id] = v;
+  saveData();
+}
+async function sessionRemoveTest(){
+  const s = curSession();
+  const def = sessionTestId ? testDefById(sessionTestId) : null;
+  if (!s || !def) return;
+  const has = Object.keys(s.resultados || {}).some(pid => s.resultados[pid] && s.resultados[pid][def.id] !== undefined);
+  if (has){
+    const ok = await appConfirm('Quitar prueba',
+      'Hay resultados de "' + def.nombre + '" cargados en esta jornada y se borran. ¿Quitar igual?',
+      { okLabel:'Quitar', danger:true });
+    if (!ok) return;
+  }
+  s.pruebas = (s.pruebas || []).filter(x => x !== def.id);
+  Object.keys(s.resultados || {}).forEach(pid => {
+    if (s.resultados[pid]){
+      delete s.resultados[pid][def.id];
+      if (!Object.keys(s.resultados[pid]).length) delete s.resultados[pid];
+    }
+  });
+  sessionTestId = s.pruebas[0] || null;
+  saveData();
+  renderSession();
+}
+async function sessionDelete(){
+  const s = curSession();
+  if (!s) return;
+  const ok = await appConfirm('Borrar jornada',
+    '¿Borrar la jornada del ' + fmtFecha(s.fecha) + ' con todos sus resultados?',
+    { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.testSessions = S.testSessions.filter(x => x.id !== s.id);
+  saveData();
+  closeSession();
+}
+
+/* --- agregar prueba a la jornada --- */
+function openTestPick(){
+  const s = curSession();
+  if (!s) return;
+  const avail = S.testDefs.filter(d => !d.archivada && !(s.pruebas || []).includes(d.id));
+  document.getElementById('testPickList').innerHTML = avail.length ? avail.map(d =>
+    '<div class="team-item"><button class="t-main" onclick="sessionAddTest(\'' + d.id + '\')">' +
+    '<div class="t-name">' + esc(d.nombre) + '</div><div class="t-sub">' + testSub(d) + '</div></button></div>'
+  ).join('') : '<div class="empty">Ya están todas tus pruebas en la jornada.<br>Podés crear una nueva abajo.</div>';
+  openOverlay('ovTestPick');
+}
+function sessionAddTest(defId){
+  const s = curSession();
+  if (!s) return;
+  if (!(s.pruebas || []).includes(defId)) s.pruebas.push(defId);
+  sessionTestId = defId;
+  saveData();
+  closeOverlay('ovTestPick');
+  renderSession();
+}
+
+/* --- creador / gestor de pruebas --- */
+function openTestsManager(){ renderTestsList(); openOverlay('ovTests'); }
+function renderTestsList(){
+  const box = document.getElementById('testsList');
+  const act = S.testDefs.filter(d => !d.archivada);
+  const arc = S.testDefs.filter(d => d.archivada);
+  function item(d){
+    const uso = testUsage(d.id);
+    return '<div class="team-item"><div class="t-main">' +
+      '<div class="t-name">' + esc(d.nombre) + '</div>' +
+      '<div class="t-sub">' + testSub(d) + ' · usada en ' + uso + ' jornada' + (uso === 1 ? '' : 's') + '</div></div>' +
+      '<div class="t-act">' +
+        '<button onclick="openTestForm(\'' + d.id + '\')" title="Editar">✏️</button>' +
+        (uso ? '<button onclick="archiveTest(\'' + d.id + '\')" title="' + (d.archivada ? 'Recuperar' : 'Archivar') + '">' + (d.archivada ? '↩️' : '🗄') + '</button>'
+             : '<button onclick="deleteTest(\'' + d.id + '\')" title="Borrar">🗑</button>') +
+      '</div></div>';
+  }
+  box.innerHTML = act.map(item).join('') +
+    (arc.length ? '<label>Archivadas (no aparecen al armar jornadas)</label>' + arc.map(item).join('') : '');
+}
+function archiveTest(id){
+  const d = testDefById(id);
+  if (!d) return;
+  d.archivada = !d.archivada;
+  saveData();
+  renderTestsList();
+}
+async function deleteTest(id){
+  const d = testDefById(id);
+  if (!d) return;
+  if (testUsage(id)){ toast('Tiene resultados cargados: archivala en vez de borrarla', true); return; }
+  const ok = await appConfirm('Borrar prueba', '¿Borrar "' + d.nombre + '"?', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.testDefs = S.testDefs.filter(x => x.id !== id);
+  saveData();
+  renderTestsList();
+}
+function openTestForm(id, fromSession){
+  testFormEditId = id || null;
+  testFormFromSession = !!fromSession;
+  const d = id ? testDefById(id) : null;
+  document.getElementById('tfTitle').textContent = d ? 'Editar prueba' : 'Nueva prueba';
+  document.getElementById('tfNombre').value = d ? d.nombre : '';
+  document.getElementById('tfUnidad').value = d ? (d.unidad || '') : '';
+  const tipoSel = document.getElementById('tfTipo');
+  tipoSel.value = d ? d.tipo : 'numero';
+  tipoSel.disabled = !!(d && testUsage(d.id));   // con datos cargados no se cambia el tipo
+  document.getElementById('tfMejor').value = d ? (d.mejorEs || 'mayor') : 'mayor';
+  tfTipoChange();
+  openOverlay('ovTestForm');
+}
+function tfTipoChange(){
+  const tipo = document.getElementById('tfTipo').value;
+  document.getElementById('tfMejorWrap').style.display = (tipo === 'texto') ? 'none' : 'block';
+  const u = document.getElementById('tfUnidad');
+  if (tipo === 'tiempo' && !u.value) u.value = 'min:seg';
+}
+function saveTestDef(){
+  const nombre = document.getElementById('tfNombre').value.trim();
+  if (!nombre){ toast('Falta el nombre de la prueba', true); return; }
+  let d = testFormEditId ? testDefById(testFormEditId) : null;
+  const esNueva = !d;
+  if (!d){ d = { id:uid(), archivada:false }; S.testDefs.push(d); }
+  d.nombre = nombre;
+  d.unidad = document.getElementById('tfUnidad').value.trim();
+  if (!document.getElementById('tfTipo').disabled) d.tipo = document.getElementById('tfTipo').value;
+  d.mejorEs = document.getElementById('tfMejor').value;
+  saveData();
+  closeOverlay('ovTestForm');
+  if (testFormFromSession){
+    closeOverlay('ovTestPick');
+    sessionAddTest(d.id);
+  } else {
+    renderTestsList();
+    if (sessionOpenId) renderSession();
+  }
+  toast(esNueva ? 'Prueba "' + nombre + '" creada' : 'Prueba actualizada');
+  testFormEditId = null;
+  testFormFromSession = false;
+}
+
+/* --- evolución en la ficha del jugador --- */
+function testHistoryFor(pid, defId){
+  const out = [];
+  S.testSessions.forEach(s => {
+    const r = s.resultados && s.resultados[pid];
+    if (r && r[defId] !== undefined && r[defId] !== null && r[defId] !== '') out.push({ fecha:s.fecha, v:r[defId] });
+  });
+  out.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  return out;
+}
+function renderEvolution(p){
+  let html = '';
+  S.testDefs.forEach(def => {
+    const h = testHistoryFor(p.id, def.id);
+    if (!h.length) return;
+    let best = null;
+    if (def.tipo !== 'texto'){
+      best = h.reduce((b, x) => b === null ? x.v : (def.mejorEs === 'menor' ? Math.min(b, x.v) : Math.max(b, x.v)), null);
+    }
+    const lines = h.slice(-6).reverse().map(x => {
+      let arrow = '';
+      const idx = h.indexOf(x);
+      if (def.tipo !== 'texto' && idx > 0){
+        const prev = h[idx - 1].v;
+        if (x.v !== prev){
+          const better = def.mejorEs === 'menor' ? x.v < prev : x.v > prev;
+          arrow = better ? ' <span style="color:var(--accent)">▲</span>' : ' <span style="color:var(--danger)">▼</span>';
+        } else arrow = ' <span style="color:var(--muted)">=</span>';
+      }
+      const isBest = best !== null && x.v === best && h.length > 1;
+      return '<div class="histline"><span>' + fmtFecha(x.fecha) + '</span><b>' + fmtTestVal(def, x.v) + arrow + (isBest ? ' 🏆' : '') + '</b></div>';
+    }).join('');
+    html += '<div style="margin-top:12px"><b style="font-size:14px">' + esc(def.nombre) + '</b>' + lines + '</div>';
+  });
+  return html ? '<div class="card"><h3>💪 Pruebas físicas</h3>' + html +
+    '<p class="hint" style="margin-top:10px">▲ mejoró · ▼ empeoró · 🏆 mejor marca</p></div>' : '';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -977,7 +1397,7 @@ function importBackupFile(ev){
       S.matches = S.matches || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers();
+      renderTeamBar(); renderPlayers(); renderPruebas();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
