@@ -96,14 +96,17 @@ testSession = {                // una "jornada de pruebas" de un equipo
   resultados: { [playerId]: { [testDefId]: valor } }
 }
 
-match = {
-  id, teamId, fecha, rival, categoria, resultado,
-  jugadores: { [playerId]: {
-    titular, minEntra, minSale,                        // minutos jugados
-    goles, asistencias,
-    amarillas, roja, faltasCometidas, faltasRecibidas
-  } },
-  cambios: [{min, sale, entra}]
+match = {                      // shape REAL implementado en Etapa 3
+  id, teamId, fecha, rival,
+  golesFavor, golesContra,     // resultado (null = sin cargar)
+  duracion,                    // minutos del partido (editable, def. 60)
+  titulares: [playerId, ...],
+  cambios: [{min, sale, entra}],
+  stats: { [playerId]: { g, a, am, r, fc, fr } }
+  // g goles · a asistencias · am amarillas (máx 2) · r roja (máx 1)
+  // fc faltas cometidas · fr faltas recibidas
+  // Los MINUTOS JUGADOS no se guardan: se derivan de titulares +
+  // cambios + duración (helper minutosDe(match, playerId)).
 }
 
 evaluation = {                 // etapa 6: puntaje técnico/táctico
@@ -140,7 +143,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 0 | Esqueleto de deploy (wrangler.jsonc + placeholder) y conexión del Worker `pruevacero` en Cloudflare | HECHA (2026-07-05) |
 | 1 | PWA real (sw.js + manifest + tema claro/oscuro) + **Equipos** + pestaña Jugadores completa (con mover/exportar) + backup JSON básico | HECHA (2026-07-05) |
 | 2 | Pestaña Pruebas: **creador de pruebas** + jornadas + planilla de carga + evolución en la ficha | HECHA (2026-07-05) |
-| 3 | Pestaña Partidos (planilla con cambios y eventos) | PENDIENTE |
+| 3 | Pestaña Partidos (planilla con cambios y eventos) | HECHA (2026-07-05) |
 | 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa) | PENDIENTE |
 | 5 | Backup JSON completo + exportes Excel con autofiltro | PENDIENTE |
 | 6 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
