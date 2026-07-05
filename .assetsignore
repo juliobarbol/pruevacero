@@ -2,4 +2,6 @@ wrangler.jsonc
 .assetsignore
 README.md
 PLAN.md
+build.py
+.github/
 .claude/
