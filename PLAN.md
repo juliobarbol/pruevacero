@@ -139,7 +139,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 |---|---|---|
 | 0 | Esqueleto de deploy (wrangler.jsonc + placeholder) y conexión del Worker `pruevacero` en Cloudflare | HECHA (2026-07-05) |
 | 1 | PWA real (sw.js + manifest + tema claro/oscuro) + **Equipos** + pestaña Jugadores completa (con mover/exportar) + backup JSON básico | HECHA (2026-07-05) |
-| 2 | Pestaña Pruebas: **creador de pruebas** + jornadas + planilla de carga + evolución en la ficha | PENDIENTE |
+| 2 | Pestaña Pruebas: **creador de pruebas** + jornadas + planilla de carga + evolución en la ficha | HECHA (2026-07-05) |
 | 3 | Pestaña Partidos (planilla con cambios y eventos) | PENDIENTE |
 | 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa) | PENDIENTE |
 | 5 | Backup JSON completo + exportes Excel con autofiltro | PENDIENTE |
