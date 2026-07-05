@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f172a">
+<title>PruevaCero</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .card {
+    background: var(--card); border-radius:16px; padding:36px 28px; max-width:420px; width:100%;
+    text-align:center; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  .ball { font-size:56px; }
+  h1 { margin:14px 0 6px; font-size:28px; letter-spacing:.5px; }
+  p { color: var(--muted); line-height:1.5; }
+  .badge {
+    display:inline-block; margin-top:18px; padding:6px 14px; border-radius:999px;
+    background:rgba(34,197,94,.15); color:var(--accent); font-size:13px; font-weight:600;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="ball">⚽</div>
+    <h1>PruevaCero</h1>
+    <p>App de análisis y seguimiento de jugadores de fútbol.</p>
+    <div class="badge">🚧 En construcción</div>
+  </div>
+</body>
+</html>
