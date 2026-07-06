@@ -532,6 +532,28 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   <div id="asisBody"></div>
 </div>
 
+<!-- ══════════════ OVERLAY EVALUACIÓN TÉCNICA ══════════════ -->
+<div class="overlay" id="ovEval">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovEval')">←</button>
+    <h2 id="evalTitle">Evaluación</h2>
+  </div>
+  <div id="evalBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY ASPECTOS DE EVALUACIÓN ══════════════ -->
+<div class="overlay" id="ovAspects">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovAspects')">←</button>
+    <h2>Aspectos a evaluar</h2>
+  </div>
+  <div id="aspectsList"></div>
+  <button class="btn" onclick="aspectCreate()">➕ Nuevo aspecto</button>
+  <p class="hint" style="margin-top:12px">Los aspectos son lo que se puntúa de 1
+  a 10 en cada evaluación (pase, control, actitud…). Los que ya tienen puntajes
+  cargados no se borran: se archivan.</p>
+</div>
+
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -571,6 +593,19 @@ const DEF_TESTDEFS = [
   { id:'t_salto',    nombre:'Salto en alto',  unidad:'cm',    tipo:'numero', mejorEs:'mayor' }
 ];
 
+// Aspectos por defecto de la evaluación técnica/táctica (1–10)
+const DEF_ASPECTS = [
+  { id:'a_pase',       nombre:'Pase' },
+  { id:'a_control',    nombre:'Control' },
+  { id:'a_gambeta',    nombre:'Gambeta (1v1)' },
+  { id:'a_definicion', nombre:'Definición' },
+  { id:'a_cabezazo',   nombre:'Cabezazo' },
+  { id:'a_velocidad',  nombre:'Velocidad' },
+  { id:'a_vision',     nombre:'Visión de juego' },
+  { id:'a_marca',      nombre:'Marca' },
+  { id:'a_actitud',    nombre:'Actitud' }
+];
+
 const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', atacante:'Atacante' };
 const ROLES = {
   arquero: [],
@@ -593,11 +628,14 @@ function loadData(){
         d.testSessions = d.testSessions || [];
         d.matches      = d.matches      || [];
         d.attendance   = d.attendance   || [];
+        d.evaluations  = d.evaluations  || [];
+        d.evalAspects  = d.evalAspects  || DEF_ASPECTS.slice();
         return d;
       }
     }
   } catch(e){}
-  return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[] };
+  return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[],
+           evaluations:[], evalAspects:DEF_ASPECTS.slice() };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -1264,6 +1302,8 @@ function openFicha(id){
 
     renderAttSummary(p) +
 
+    renderEvalCard(p) +
+
     renderEvolution(p) +
 
     (p.notas ? '<div class="card"><h3>📝 Notas</h3><p class="hint" style="white-space:pre-wrap">' + esc(p.notas) + '</p></div>' : '') +
@@ -1281,6 +1321,7 @@ function openFicha(id){
     '<div class="btn-row"><button class="btn danger" onclick="deletePlayerAsk()">🗑 Eliminar jugador</button></div>';
 
   openOverlay('ovFicha');
+  fichaRadarDraw();   // el canvas necesita estar visible para medirse
 }
 function fichaEdit(){ if (fichaId){ openPlayerForm(fichaId); } }
 function addMedicion(){
@@ -2244,6 +2285,271 @@ function renderAttSummary(p){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/evals.js ===== Evaluación técnica 1–10 + radar
+   ═══════════════════════════════════════════════════════════════════ */
+let evalPlayerId = null;     // jugador en evaluación
+let evalDraft = null;        // { fecha, scores }
+
+function activeAspects(){ return S.evalAspects.filter(a => !a.archivada); }
+function aspectUsage(aid){
+  return S.evaluations.filter(e => e.scores && e.scores[aid] !== undefined).length;
+}
+function evalsOf(pid){
+  return S.evaluations.filter(e => e.playerId === pid)
+    .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+}
+function lastEval(pid){ const l = evalsOf(pid); return l.length ? l[l.length - 1] : null; }
+function evalAvg(e){
+  const vals = Object.keys(e.scores || {}).map(k => e.scores[k]).filter(v => typeof v === 'number');
+  if (!vals.length) return null;
+  return Math.round(vals.reduce((s, v) => s + v, 0) / vals.length * 10) / 10;
+}
+// Promedio por aspecto de la categoría del jugador (última evaluación de cada uno)
+function catAvgScores(p){
+  const t = S.teams.find(x => x.id === p.teamId);
+  const myCat = playerCat(t, p);
+  const myYear = catOf(p);
+  const peers = S.players.filter(q => {
+    if (q.teamId !== p.teamId) return false;
+    if (myCat) { const qc = playerCat(t, q); return qc && qc.id === myCat.id; }
+    return catOf(q) === myYear;   // sin categorías: mismo año de nacimiento
+  });
+  const sums = {}, counts = {};
+  let n = 0;
+  peers.forEach(q => {
+    const e = lastEval(q.id);
+    if (!e) return;
+    n++;
+    Object.keys(e.scores || {}).forEach(k => {
+      sums[k] = (sums[k] || 0) + e.scores[k];
+      counts[k] = (counts[k] || 0) + 1;
+    });
+  });
+  if (n < 2) return null;   // sin compañeros evaluados no hay comparación
+  const avg = {};
+  Object.keys(sums).forEach(k => { avg[k] = sums[k] / counts[k]; });
+  return avg;
+}
+
+/* --- radar en canvas (sin librerías) --- */
+function drawRadar(cv, labels, series){
+  const css = getComputedStyle(document.documentElement);
+  const cMuted = css.getPropertyValue('--muted').trim() || '#94a3b8';
+  const cBorder = css.getPropertyValue('--border').trim() || '#334155';
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 320, h = Math.round(w * 0.92);
+  cv.width = w * dpr; cv.height = h * dpr;
+  cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const cx = w / 2, cy = h / 2 + 4, R = Math.min(w, h) * 0.34;
+  const n = labels.length;
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
+
+  // anillos y ejes
+  ctx.strokeStyle = cBorder; ctx.lineWidth = 1;
+  for (let ring = 2; ring <= 10; ring += 2){
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++){
+      const r = R * ring / 10, a = ang(i % n);
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  for (let i = 0; i < n; i++){
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(ang(i)) * R, cy + Math.sin(ang(i)) * R);
+  }
+  ctx.stroke();
+
+  // etiquetas
+  ctx.fillStyle = cMuted;
+  ctx.font = '600 10px system-ui, sans-serif';
+  for (let i = 0; i < n; i++){
+    const a = ang(i);
+    const x = cx + Math.cos(a) * (R + 12), y = cy + Math.sin(a) * (R + 12);
+    ctx.textAlign = Math.abs(Math.cos(a)) < 0.3 ? 'center' : (Math.cos(a) > 0 ? 'left' : 'right');
+    ctx.textBaseline = Math.abs(Math.sin(a)) < 0.3 ? 'middle' : (Math.sin(a) > 0 ? 'top' : 'bottom');
+    let txt = labels[i];
+    if (txt.length > 12) txt = txt.slice(0, 11) + '…';
+    ctx.fillText(txt, x, y);
+  }
+
+  // series: {vals:[0-10], color, fillAlpha}
+  series.forEach(s => {
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++){
+      const v = Math.max(0, Math.min(10, s.vals[i % n] || 0));
+      const a = ang(i % n), r = R * v / 10;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.globalAlpha = s.fillAlpha;
+    ctx.fillStyle = s.color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+function fichaRadarDraw(){
+  const cv = document.getElementById('radarCv');
+  if (!cv || !fichaId) return;
+  const p = S.players.find(x => x.id === fichaId);
+  const e = lastEval(fichaId);
+  if (!p || !e) return;
+  const css = getComputedStyle(document.documentElement);
+  const cAccent = css.getPropertyValue('--accent').trim() || '#22c55e';
+  const asp = activeAspects();
+  const labels = asp.map(a => a.nombre);
+  const series = [];
+  const avg = catAvgScores(p);
+  if (avg) series.push({ vals: asp.map(a => avg[a.id] || 0), color:'#38bdf8', fillAlpha:0.10 });
+  series.push({ vals: asp.map(a => (e.scores || {})[a.id] || 0), color:cAccent, fillAlpha:0.22 });
+  drawRadar(cv, labels, series);
+}
+
+/* --- tarjeta en la ficha --- */
+function renderEvalCard(p){
+  const evs = evalsOf(p.id).slice().reverse();
+  let html = '<div class="card"><h3>🎯 Evaluación técnica</h3>';
+  if (!evs.length){
+    html += '<p class="hint">Puntualo de 1 a 10 en cada aspecto (pase, control, actitud…) ' +
+      'y acá aparece su radar, comparado con el promedio de su categoría.</p>';
+  } else {
+    const e = evs[0];
+    const avg = catAvgScores(p);
+    html += '<canvas id="radarCv" style="width:100%;display:block"></canvas>' +
+      '<p class="hint" style="text-align:center">' +
+      '<span style="color:var(--accent);font-weight:700">● ' + esc(p.nombre) + '</span> (' + fmtFecha(e.fecha) + ', prom. ' + evalAvg(e) + ')' +
+      (avg ? ' &nbsp; <span style="color:#38bdf8;font-weight:700">● Promedio categoría</span>' : '') +
+      '</p>';
+    html += evs.slice(0, 5).map(e2 =>
+      '<div class="histline"><span>' + fmtFecha(e2.fecha) + '</span><b>promedio ' + evalAvg(e2) +
+      ' <a href="javascript:evalDelete(\'' + e2.id + '\')" style="color:var(--danger);text-decoration:none">✕</a></b></div>'
+    ).join('');
+  }
+  html += '<div class="btn-row"><button class="btn sec" onclick="evalOpen()">➕ Nueva evaluación</button>' +
+    '<button class="btn sec" onclick="openAspectsManager()">🛠 Aspectos</button></div></div>';
+  return html;
+}
+
+/* --- formulario de evaluación --- */
+function evalOpen(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  evalPlayerId = p.id;
+  const prev = lastEval(p.id);
+  const scores = {};
+  activeAspects().forEach(a => {
+    scores[a.id] = (prev && prev.scores && typeof prev.scores[a.id] === 'number') ? prev.scores[a.id] : 5;
+  });
+  evalDraft = { fecha: todayISO(), scores: scores };
+  document.getElementById('evalTitle').textContent = 'Evaluar · ' + p.nombre + ' ' + (p.apellido || '');
+  renderEvalForm();
+  openOverlay('ovEval');
+}
+function renderEvalForm(){
+  if (!evalDraft) return;
+  const rows = activeAspects().map(a =>
+    '<div class="step"><div class="lbl">' + esc(a.nombre) + '</div>' +
+    '<button onclick="evalAdj(\'' + a.id + '\',-1)">−</button>' +
+    '<div class="val">' + evalDraft.scores[a.id] + '</div>' +
+    '<button onclick="evalAdj(\'' + a.id + '\',1)">＋</button></div>'
+  ).join('');
+  document.getElementById('evalBody').innerHTML =
+    '<label style="margin-top:0">Fecha</label>' +
+    '<input type="date" value="' + esc(evalDraft.fecha) + '" onchange="evalDraft.fecha=this.value||evalDraft.fecha">' +
+    '<label>Puntajes (1 = flojo · 10 = excelente)</label>' + rows +
+    '<div class="btn-row"><button class="btn sec" onclick="closeOverlay(\'ovEval\')">Cancelar</button>' +
+    '<button class="btn" onclick="evalSave()">Guardar evaluación</button></div>';
+}
+function evalAdj(aid, d){
+  if (!evalDraft) return;
+  let v = (evalDraft.scores[aid] || 5) + d;
+  if (v < 1) v = 1;
+  if (v > 10) v = 10;
+  evalDraft.scores[aid] = v;
+  renderEvalForm();
+}
+function evalSave(){
+  const p = S.players.find(x => x.id === evalPlayerId);
+  if (!p || !evalDraft) return;
+  S.evaluations.push({ id:uid(), playerId:p.id, teamId:p.teamId, fecha:evalDraft.fecha, scores:evalDraft.scores });
+  saveData();
+  closeOverlay('ovEval');
+  evalDraft = null;
+  openFicha(p.id);
+  toast('Evaluación guardada');
+}
+async function evalDelete(id){
+  const e = S.evaluations.find(x => x.id === id);
+  if (!e) return;
+  const ok = await appConfirm('Borrar evaluación', '¿Borrar la evaluación del ' + fmtFecha(e.fecha) + '?', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.evaluations = S.evaluations.filter(x => x.id !== id);
+  saveData();
+  if (fichaId) openFicha(fichaId);
+}
+
+/* --- gestor de aspectos --- */
+function openAspectsManager(){ renderAspectsList(); openOverlay('ovAspects'); }
+function renderAspectsList(){
+  const act = S.evalAspects.filter(a => !a.archivada);
+  const arc = S.evalAspects.filter(a => a.archivada);
+  function item(a){
+    const uso = aspectUsage(a.id);
+    return '<div class="team-item"><div class="t-main">' +
+      '<div class="t-name">' + esc(a.nombre) + '</div>' +
+      '<div class="t-sub">puntuado en ' + uso + ' evaluación' + (uso === 1 ? '' : 'es') + '</div></div>' +
+      '<div class="t-act">' +
+        '<button onclick="aspectRename(\'' + a.id + '\')" title="Renombrar">✏️</button>' +
+        (uso ? '<button onclick="aspectArchive(\'' + a.id + '\')" title="' + (a.archivada ? 'Recuperar' : 'Archivar') + '">' + (a.archivada ? '↩️' : '🗄') + '</button>'
+             : '<button onclick="aspectDelete(\'' + a.id + '\')" title="Borrar">🗑</button>') +
+      '</div></div>';
+  }
+  document.getElementById('aspectsList').innerHTML = act.map(item).join('') +
+    (arc.length ? '<label>Archivados (no aparecen en evaluaciones nuevas)</label>' + arc.map(item).join('') : '');
+}
+async function aspectCreate(){
+  const name = await appPromptText('Nuevo aspecto', 'Qué se va a puntuar de 1 a 10:', '', 'Ej: Juego aéreo');
+  if (!name) return;
+  S.evalAspects.push({ id:uid(), nombre:name });
+  saveData();
+  renderAspectsList();
+}
+async function aspectRename(id){
+  const a = S.evalAspects.find(x => x.id === id);
+  if (!a) return;
+  const name = await appPromptText('Renombrar aspecto', '', a.nombre);
+  if (!name) return;
+  a.nombre = name;
+  saveData();
+  renderAspectsList();
+}
+function aspectArchive(id){
+  const a = S.evalAspects.find(x => x.id === id);
+  if (!a) return;
+  a.archivada = !a.archivada;
+  saveData();
+  renderAspectsList();
+}
+async function aspectDelete(id){
+  const a = S.evalAspects.find(x => x.id === id);
+  if (!a) return;
+  if (aspectUsage(id)){ toast('Tiene puntajes cargados: archivalo en vez de borrarlo', true); return; }
+  const ok = await appConfirm('Borrar aspecto', '¿Borrar "' + a.nombre + '"?', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.evalAspects = S.evalAspects.filter(x => x.id !== id);
+  saveData();
+  renderAspectsList();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -2476,6 +2782,8 @@ function importBackupFile(ev){
       S.testSessions = S.testSessions || [];
       S.matches = S.matches || [];
       S.attendance = S.attendance || [];
+      S.evaluations = S.evaluations || [];
+      S.evalAspects = S.evalAspects || DEF_ASPECTS.slice();
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       saveData(); saveUI();
       renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
