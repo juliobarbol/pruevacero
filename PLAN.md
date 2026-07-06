@@ -144,10 +144,32 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 1 | PWA real (sw.js + manifest + tema claro/oscuro) + **Equipos** + pestaña Jugadores completa (con mover/exportar) + backup JSON básico | HECHA (2026-07-05) |
 | 2 | Pestaña Pruebas: **creador de pruebas** + jornadas + planilla de carga + evolución en la ficha | HECHA (2026-07-05) |
 | 3 | Pestaña Partidos (planilla con cambios y eventos) | HECHA (2026-07-05) |
-| 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa) | PENDIENTE |
+| 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa ordenable + resumen 📊 en la ficha) | HECHA (2026-07-06) |
 | 5 | Backup JSON completo + exportes Excel con autofiltro | PENDIENTE |
-| 6 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
-| 7 | Asistencia a entrenamientos + historial de lesiones + objetivos por jugador | PENDIENTE |
-| 8 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
+| 6 | **Categorías dentro del equipo** + **escudo del club** (pedido 2026-07-06, ver decisiones) | PENDIENTE |
+| 7 | **Asistencia a entrenamientos** (por equipo+categoría, días/horas de clase editables, lista del día de hoy accesible, edición retroactiva, % de asistencia) | PENDIENTE |
+| 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
+| 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
+| 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
+
+### Pedidos de Julio del 2026-07-06 (detalle para las etapas 6 y 7)
+
+- **Categorías dentro de un mismo equipo**: un equipo (club) tiene varias
+  categorías y cada categoría juega partidos contra rivales de SU categoría.
+  La categoría del jugador ya se deriva del año de nacimiento; falta:
+  asignar categoría a los PARTIDOS (para filtrar el plantel al armar la
+  planilla) y filtros por categoría en jugadores/pruebas/estadísticas.
+  A definir al implementar: si hace falta agrupar dos años en una categoría
+  (ej. 2012-2013), preguntarle a Julio.
+- **Escudo del club**: imagen opcional por equipo (guardar en IndexedDB,
+  mismo patrón de fotos que las otras apps; localStorage no aguanta imágenes).
+- **Asistencia** (reemplaza la idea genérica anterior):
+  - Presente/ausente por CLASE (entrenamiento), no solo por fecha suelta.
+  - Cada categoría tiene sus **días y horas de clase**, editables.
+  - Al pasar lista: elegir equipo y categoría → botón directo con la clase
+    de HOY (según los días/horas configurados).
+  - Aunque no se haya pasado lista ese día, se puede **cargar o editar una
+    fecha pasada** (por si no se usó la app en el momento).
+  - El % de asistencia se usa como referencia para decidir titularidad.

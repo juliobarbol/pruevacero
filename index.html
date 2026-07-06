@@ -207,6 +207,19 @@ html[data-theme="light"] .btn{color:#fff}
 .toast.err{border-color:var(--danger)}
 @keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ============================ ESTADÍSTICAS ============================ */
+.sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:12px}
+.sum-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 8px;text-align:center}
+.sum-item .n{font-size:19px;font-weight:800}
+.sum-item .l{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px}
+.stats-twrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
+.stats th,.stats td{padding:9px 8px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap}
+.stats tr:last-child td{border-bottom:none}
+.stats th{font-size:11px;color:var(--muted);cursor:pointer;user-select:none;background:var(--surface)}
+.stats th.on{color:var(--accent)}
+.stats td:first-child,.stats th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);font-weight:700;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+
 /* ============================ PARTIDOS ============================ */
 .step{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:7px 10px;margin-top:6px}
 .step .lbl{flex:1;font-size:13px;font-weight:700;min-width:0}
@@ -262,12 +275,7 @@ html[data-theme="light"] .btn{color:#fff}
 
   <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
   <section class="tab" id="tab-stats">
-    <div class="card">
-      <h3>📊 Estadísticas</h3>
-      <p class="hint">Promedios y porcentajes automáticos por jugador: minutos,
-      goles y asistencias por partido, frecuencia de tarjetas y tabla comparativa
-      del plantel. <b>Llega en una etapa próxima.</b></p>
-    </div>
+    <div id="statsContent"></div>
   </section>
 
   <!-- ══════════════ PESTAÑA CONFIG ══════════════ -->
@@ -645,6 +653,7 @@ function switchTab(t){
   document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
   if (t === 'pruebas') renderPruebas();
   if (t === 'partidos') renderPartidos();
+  if (t === 'stats') renderStats();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
@@ -693,12 +702,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -723,7 +732,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -926,6 +935,8 @@ function openFicha(id){
       dgi('Años de fútbol', p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '') +
       dgi('Otros deportes', esc(otros)) +
     '</div></div>' +
+
+    renderMatchSummary(p) +
 
     renderEvolution(p) +
 
@@ -1670,6 +1681,115 @@ function exportBackup(){
   download('pruevacero-backup-' + todayISO() + '.json', JSON.stringify(payload, null, 2));
   toast('Copia de seguridad descargada');
 }
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/stats.js ===== Estadísticas: promedios y tabla comparativa
+   ═══════════════════════════════════════════════════════════════════ */
+let statsSortKey = 'min';
+let statsSortDir = -1;   // -1 desc, 1 asc
+
+// Acumulados de un jugador sobre un conjunto de partidos
+function aggFor(matches, pid){
+  const o = { pj:0, min:0, g:0, a:0, am:0, r:0, fc:0, fr:0 };
+  matches.forEach(m => {
+    if (!participantsOf(m)[pid]) return;
+    o.pj++;
+    o.min += minutosDe(m, pid);
+    const st = matchStats(m, pid);
+    o.g += st.g || 0; o.a += st.a || 0; o.am += st.am || 0;
+    o.r += st.r || 0; o.fc += st.fc || 0; o.fr += st.fr || 0;
+  });
+  return o;
+}
+function per(v, pj){ return pj ? Math.round((v / pj) * 10) / 10 : 0; }
+// "una cada N partidos" (para amarillas/faltas)
+function cadaTxt(v, pj){
+  if (!v || !pj) return '—';
+  const n = Math.round((pj / v) * 10) / 10;
+  return '1 cada ' + n + ' PJ';
+}
+function statsSort(k){
+  if (statsSortKey === k) statsSortDir = -statsSortDir;
+  else { statsSortKey = k; statsSortDir = -1; }
+  renderStats();
+}
+function renderStats(){
+  const box = document.getElementById('statsContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">📊</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    return;
+  }
+  const matches = S.matches.filter(m => m.teamId === t.id);
+  if (!matches.length){
+    box.innerHTML = '<div class="empty"><div class="big">📊</div>Sin partidos cargados en <b>' + esc(t.nombre) + '</b>.<br><br>' +
+      'Cargá partidos en la pestaña ⚽ Partidos y acá<br>aparecen los promedios y la comparativa del plantel.</div>';
+    return;
+  }
+
+  /* Resumen del equipo */
+  let g = 0, e = 0, p = 0, gf = 0, gc = 0, conRes = 0;
+  matches.forEach(m => {
+    if (m.golesFavor == null || m.golesContra == null) return;
+    conRes++; gf += m.golesFavor; gc += m.golesContra;
+    if (m.golesFavor > m.golesContra) g++;
+    else if (m.golesFavor < m.golesContra) p++;
+    else e++;
+  });
+  let html = '<div class="sum-grid">' +
+    '<div class="sum-item"><div class="n">' + matches.length + '</div><div class="l">Partidos</div></div>' +
+    '<div class="sum-item"><div class="n">' + (conRes ? g + '-' + e + '-' + p : '—') + '</div><div class="l">G-E-P</div></div>' +
+    '<div class="sum-item"><div class="n">' + (conRes ? gf + ':' + gc : '—') + '</div><div class="l">Goles F:C</div></div>' +
+  '</div>';
+
+  /* Tabla comparativa */
+  const cols = [
+    ['pj','PJ'], ['min','Min'], ['minpj','Min/PJ'],
+    ['g','⚽'], ['gpj','⚽/PJ'], ['a','🅰️'],
+    ['am','🟨'], ['ampj','🟨/PJ'], ['r','🟥'], ['fc','FC'], ['fr','FR']
+  ];
+  const rows = teamPlayers(t.id).map(pl => {
+    const o = aggFor(matches, pl.id);
+    return {
+      nombre: pl.nombre + ' ' + (pl.apellido || ''),
+      pj:o.pj, min:o.min, minpj:per(o.min, o.pj),
+      g:o.g, gpj:per(o.g, o.pj), a:o.a,
+      am:o.am, ampj:per(o.am, o.pj), r:o.r, fc:o.fc, fr:o.fr
+    };
+  });
+  rows.sort((a, b) => {
+    const d = (a[statsSortKey] - b[statsSortKey]) * statsSortDir;
+    return d !== 0 ? d : a.nombre.localeCompare(b.nombre, 'es');
+  });
+  html += '<div class="stats-twrap"><table class="stats"><thead><tr><th>Jugador</th>' +
+    cols.map(c => '<th class="' + (statsSortKey === c[0] ? 'on' : '') + '" onclick="statsSort(\'' + c[0] + '\')">' + c[1] +
+      (statsSortKey === c[0] ? (statsSortDir < 0 ? ' ↓' : ' ↑') : '') + '</th>').join('') +
+    '</tr></thead><tbody>' +
+    rows.map(r => '<tr><td>' + esc(r.nombre) + '</td>' + cols.map(c => '<td>' + r[c[0]] + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table></div>' +
+    '<p class="hint" style="margin-top:10px">Tocá una columna para ordenar. PJ = partidos jugados · ' +
+    'Min/PJ, ⚽/PJ, 🟨/PJ = promedio por partido · FC/FR = faltas cometidas/recibidas. ' +
+    'Deslizá la tabla hacia el costado para ver todas las columnas.</p>';
+
+  box.innerHTML = html;
+}
+
+/* --- resumen de partidos en la ficha del jugador (todos sus equipos) --- */
+function renderMatchSummary(p){
+  const o = aggFor(S.matches, p.id);
+  if (!o.pj) return '';
+  return '<div class="card"><h3>📊 Partidos</h3><div class="datagrid tri">' +
+    dgi('Jugados', o.pj) +
+    dgi('Minutos', o.min) +
+    dgi('Min/PJ', per(o.min, o.pj)) +
+    dgi('Goles', o.g + (o.g ? ' (' + per(o.g, o.pj) + '/PJ)' : '')) +
+    dgi('Asistencias', o.a) +
+    dgi('🟥 Rojas', o.r) +
+    dgi('🟨 Amarillas', o.am + (o.am ? ' · ' + cadaTxt(o.am, o.pj) : '')) +
+    dgi('Faltas com.', o.fc + (o.fc ? ' · ' + cadaTxt(o.fc, o.pj) : '')) +
+    dgi('Faltas rec.', o.fr) +
+  '</div></div>';
+}
 function importBackupFile(ev){
   const f = ev.target.files[0];
   ev.target.value = '';
@@ -1691,7 +1811,7 @@ function importBackupFile(ev){
       S.matches = S.matches || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
