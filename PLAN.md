@@ -123,10 +123,16 @@ match = {                      // shape REAL implementado en Etapa 3
   // cambios + duración (helper minutosDe(match, playerId)).
 }
 
-evaluation = {                 // etapa 6: puntaje técnico/táctico
+evaluation = {                 // shape REAL implementado en Etapa 8
   id, teamId, playerId, fecha,
-  puntajes: { pase, control, unoVsUno, cabezazo, vision, actitud, ... }  // 1–10
+  scores: { [aspectId]: 1-10 }
 }
+evalAspects = [{ id, nombre, archivada? }]   // aspectos configurables
+// (9 precargados: pase, control, gambeta, definición, cabezazo, velocidad,
+// visión, marca, actitud). Radar en canvas propio (drawRadar, sin librerías)
+// en la ficha: última evaluación vs promedio de la categoría (catAvgScores:
+// última evaluación de cada compañero de la misma categoría — o mismo año
+// si el equipo no define categorías; requiere >= 2 evaluados).
 ```
 
 Las categorías (2010, 2011, …) se **derivan del año de nacimiento**, no se
@@ -162,7 +168,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 5 | Exportes Excel con autofiltro (jugadores, estadísticas y jornada de pruebas; SheetJS por CDN) | HECHA (2026-07-06) |
 | 6 | **Categorías dentro del equipo** (rango de años, partidos por categoría, filtro en Jugadores) + **escudo del club** + **foto por jugador** (IndexedDB `pruevacero_photos`, viajan en backup y ficha exportada) | HECHA (2026-07-06) |
 | 7 | **Asistencia a entrenamientos** (pestaña 🗓️ Clases: por equipo+categoría, días/horas de clase editables en la categoría, lista de HOY accesible, edición retroactiva, % de asistencia y resumen en la ficha) | HECHA (2026-07-06) |
-| 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
+| 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría (aspectos configurables, en la ficha) | HECHA (2026-07-06) |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
 | 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
 
