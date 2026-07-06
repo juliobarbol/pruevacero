@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script>
 // Tema antes del primer pintado (evita flash)
 (function(){
@@ -287,6 +288,15 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
       <div class="btn-row"><button class="btn sec" onclick="openTeamOverlay()">Gestionar equipos</button></div>
     </div>
     <div class="card">
+      <h3>📤 Exportar a Excel</h3>
+      <p class="hint">Descarga planillas de Excel (con filtros en la cabecera)
+      del equipo activo. Las jornadas de prueba se exportan desde cada jornada.</p>
+      <div class="btn-row">
+        <button class="btn sec" onclick="exportPlayersXlsx()">👤 Jugadores</button>
+        <button class="btn sec" onclick="exportStatsXlsx()">📊 Estadísticas</button>
+      </div>
+    </div>
+    <div class="card">
       <h3>💾 Copia de seguridad</h3>
       <p class="hint">Los datos viven en este dispositivo. Exportá la copia cada
       tanto (equipos, jugadores y todo lo demás en un archivo) y guardala donde
@@ -387,6 +397,7 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   <div class="ov-head">
     <button class="icon-btn" onclick="closeSession()">←</button>
     <h2>Jornada de pruebas</h2>
+    <button class="icon-btn" onclick="exportSessionXlsx()" title="Exportar Excel">📤</button>
     <button class="icon-btn" onclick="sessionDelete()" title="Borrar jornada">🗑</button>
   </div>
   <div id="sessionBody"></div>
@@ -1681,6 +1692,96 @@ function exportBackup(){
   download('pruevacero-backup-' + todayISO() + '.json', JSON.stringify(payload, null, 2));
   toast('Copia de seguridad descargada');
 }
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/export.js ===== Exportes a Excel (SheetJS, con autofiltro)
+   ═══════════════════════════════════════════════════════════════════ */
+function _xlsxOk(){
+  if (typeof XLSX === 'undefined'){
+    toast('La librería de Excel no cargó todavía: probá con internet y reintentá', true);
+    return false;
+  }
+  return true;
+}
+function _saveXlsx(aoa, sheetName, fileName){
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };   // autofiltro en la cabecera
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, fileName);
+}
+function _slug(s){
+  return String(s || '').trim().replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ]+/g, '-').replace(/^-+|-+$/g, '') || 'equipo';
+}
+function aoaJugadores(t){
+  const head = ['Apellido','Nombre','Nacimiento','Categoría','Edad','Posición','Pie','Mano','Ojo',
+                'Peso (kg)','Altura (cm)','Años de fútbol','Otros deportes','Notas'];
+  const rows = teamPlayers(t.id)
+    .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'))
+    .map(p => {
+      const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
+      const e = edad(p.nacimiento);
+      return [
+        p.apellido || '', p.nombre, p.nacimiento ? fmtFecha(p.nacimiento) : '', catOf(p) || '',
+        e != null ? e : '', posLabel(p) || '',
+        p.lateralidad.pie || '', p.lateralidad.mano || '', p.lateralidad.ojo || '',
+        lp ? lp.kg : '', la ? la.cm : '',
+        p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '',
+        p.antecedentes.otrosDeportes || '', p.notas || ''
+      ];
+    });
+  return [head].concat(rows);
+}
+function exportPlayersXlsx(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  if (!teamPlayers(t.id).length){ toast('El equipo no tiene jugadores', true); return; }
+  if (!_xlsxOk()) return;
+  _saveXlsx(aoaJugadores(t), 'Jugadores', 'jugadores-' + _slug(t.nombre) + '-' + todayISO() + '.xlsx');
+  toast('Excel de jugadores descargado');
+}
+function aoaStats(t){
+  const matches = S.matches.filter(m => m.teamId === t.id);
+  const head = ['Jugador','PJ','Minutos','Min/PJ','Goles','Goles/PJ','Asistencias',
+                'Amarillas','Amarillas/PJ','Rojas','Faltas cometidas','Faltas recibidas'];
+  const rows = teamPlayers(t.id)
+    .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'))
+    .map(p => {
+      const o = aggFor(matches, p.id);
+      return [p.nombre + ' ' + (p.apellido || ''), o.pj, o.min, per(o.min, o.pj),
+              o.g, per(o.g, o.pj), o.a, o.am, per(o.am, o.pj), o.r, o.fc, o.fr];
+    });
+  return [head].concat(rows);
+}
+function exportStatsXlsx(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  if (!S.matches.some(m => m.teamId === t.id)){ toast('No hay partidos cargados en este equipo', true); return; }
+  if (!_xlsxOk()) return;
+  _saveXlsx(aoaStats(t), 'Estadísticas', 'estadisticas-' + _slug(t.nombre) + '-' + todayISO() + '.xlsx');
+  toast('Excel de estadísticas descargado');
+}
+function aoaSession(s){
+  const defs = (s.pruebas || []).map(id => testDefById(id)).filter(Boolean);
+  const head = ['Jugador'].concat(defs.map(d => d.nombre + (d.unidad ? ' (' + d.unidad + ')' : '')));
+  const rows = sessionPlayers(s).map(p => {
+    return [p.nombre + ' ' + (p.apellido || '')].concat(defs.map(d => {
+      const v = (s.resultados[p.id] || {})[d.id];
+      if (v === undefined || v === null || v === '') return '';
+      return d.tipo === 'tiempo' ? fmtTiempo(v) : v;
+    }));
+  });
+  return [head].concat(rows);
+}
+function exportSessionXlsx(){
+  const s = curSession();
+  if (!s) return;
+  if (!(s.pruebas || []).length){ toast('La jornada no tiene pruebas elegidas', true); return; }
+  if (!_xlsxOk()) return;
+  const t = S.teams.find(x => x.id === s.teamId);
+  _saveXlsx(aoaSession(s), 'Pruebas', 'pruebas-' + s.fecha + '-' + _slug(t ? t.nombre : '') + '.xlsx');
+  toast('Excel de la jornada descargado');
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/stats.js ===== Estadísticas: promedios y tabla comparativa
    ═══════════════════════════════════════════════════════════════════ */

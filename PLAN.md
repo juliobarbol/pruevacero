@@ -145,8 +145,8 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 2 | Pestaña Pruebas: **creador de pruebas** + jornadas + planilla de carga + evolución en la ficha | HECHA (2026-07-05) |
 | 3 | Pestaña Partidos (planilla con cambios y eventos) | HECHA (2026-07-05) |
 | 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa ordenable + resumen 📊 en la ficha) | HECHA (2026-07-06) |
-| 5 | Backup JSON completo + exportes Excel con autofiltro | PENDIENTE |
-| 6 | **Categorías dentro del equipo** + **escudo del club** (pedido 2026-07-06, ver decisiones) | PENDIENTE |
+| 5 | Exportes Excel con autofiltro (jugadores, estadísticas y jornada de pruebas; SheetJS por CDN) | HECHA (2026-07-06) |
+| 6 | **Categorías dentro del equipo** + **escudo del club** + **foto por jugador** (pedido 2026-07-06, ver decisiones) | PENDIENTE |
 | 7 | **Asistencia a entrenamientos** (por equipo+categoría, días/horas de clase editables, lista del día de hoy accesible, edición retroactiva, % de asistencia) | PENDIENTE |
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
@@ -161,10 +161,19 @@ Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
   La categoría del jugador ya se deriva del año de nacimiento; falta:
   asignar categoría a los PARTIDOS (para filtrar el plantel al armar la
   planilla) y filtros por categoría en jugadores/pruebas/estadísticas.
-  A definir al implementar: si hace falta agrupar dos años en una categoría
-  (ej. 2012-2013), preguntarle a Julio.
+  **Confirmado por Julio (2026-07-06)**: la categoría por defecto es el año
+  de nacimiento, pero debe ser EDITABLE como rango de años (ej. una
+  categoría mayor que admite nacidos "entre 2005 y 2007"). Modelo tentativo:
+  el equipo define sus categorías `{ id, nombre, desdeAnio, hastaAnio }` y
+  el jugador cae solo en la que corresponde por su año (con override manual
+  si hiciera falta).
 - **Escudo del club**: imagen opcional por equipo (guardar en IndexedDB,
   mismo patrón de fotos que las otras apps; localStorage no aguanta imágenes).
+- **Foto por jugador (pedido 2026-07-06)**: en vez de las iniciales, poder
+  ponerle una foto a cada jugador para verle la cara (avatar en la lista y
+  en la ficha). Guardar en IndexedDB (patrón `pq_photos` de Presupuestos AR:
+  el registro guarda un ID y el binario vive en IDB); incluirlas en el
+  backup y en la ficha exportada del jugador.
 - **Asistencia** (reemplaza la idea genérica anterior):
   - Presente/ausente por CLASE (entrenamiento), no solo por fecha suelta.
   - Cada categoría tiene sus **días y horas de clase**, editables.
