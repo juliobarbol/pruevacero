@@ -94,8 +94,12 @@ nav button.active{color:var(--accent)}
 }
 .avatar{
   width:44px;height:44px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
-  background:var(--accent-dim);color:var(--accent);font-weight:800;font-size:15px;
+  background:var(--accent-dim);color:var(--accent);font-weight:800;font-size:15px;overflow:hidden;
 }
+.avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.pill-logo{width:20px;height:20px;border-radius:50%;object-fit:cover;flex:none}
+.t-logo{width:38px;height:38px;border-radius:10px;flex:none;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:17px;overflow:hidden}
+.t-logo img{width:100%;height:100%;object-fit:cover}
 .pc-info{flex:1;min-width:0}
 .pc-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pc-sub{font-size:12.5px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -253,6 +257,7 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
 <header>
   <div class="brand">⚽</div>
   <button class="team-pill" onclick="openTeamOverlay()">
+    <span id="teamPillLogo" style="display:contents"></span>
     <span id="teamPillName">Sin equipo</span><span class="caret">▼</span>
   </button>
   <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Tema">🌙</button>
@@ -463,6 +468,37 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   </div>
 </div>
 
+<!-- ══════════════ OVERLAY CATEGORÍAS ══════════════ -->
+<div class="overlay" id="ovCats">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovCats')">←</button>
+    <h2 id="catsTitle">Categorías</h2>
+  </div>
+  <div id="catsList"></div>
+  <button class="btn" onclick="openCatForm()">➕ Nueva categoría</button>
+  <p class="hint" style="margin-top:12px">Cada categoría define entre qué años
+  pueden haber nacido sus jugadores (puede ser un solo año, ej. 2012, o un
+  rango, ej. 2005 a 2007). Los jugadores caen solos en su categoría según la
+  fecha de nacimiento.</p>
+</div>
+
+<!-- ══════════════ OVERLAY FORM CATEGORÍA ══════════════ -->
+<div class="overlay" id="ovCatForm">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovCatForm')">←</button>
+    <h2 id="cfTitle">Nueva categoría</h2>
+  </div>
+  <label>Nombre *</label><input id="cfNombre" placeholder="Ej: Cat 2012, Sub-17, Primera…" autocomplete="off">
+  <div class="form-grid">
+    <div><label>Nacidos desde (año) *</label><input id="cfDesde" type="number" inputmode="numeric" min="1940" max="2100" placeholder="2012"></div>
+    <div><label>Hasta (año)</label><input id="cfHasta" type="number" inputmode="numeric" min="1940" max="2100" placeholder="igual que desde"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn sec" onclick="closeOverlay('ovCatForm')">Cancelar</button>
+    <button class="btn" onclick="saveCat()">Guardar</button>
+  </div>
+</div>
+
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -479,6 +515,8 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
 <div id="toasts"></div>
 <input type="file" id="fileBackup" accept=".json,application/json" style="display:none" onchange="importBackupFile(event)">
 <input type="file" id="filePlayer" accept=".json,application/json" style="display:none" onchange="importPlayerFile(event)">
+<input type="file" id="filePhotoPlayer" accept="image/*" style="display:none" onchange="photoPlayerFile(event)">
+<input type="file" id="fileLogoTeam" accept="image/*" style="display:none" onchange="logoTeamFile(event)">
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════
@@ -640,6 +678,126 @@ document.getElementById('mInput').addEventListener('keydown', e => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/photos.js ===== Fotos (jugador y escudo) en IndexedDB
+   ═══════════════════════════════════════════════════════════════════ */
+// El binario vive en IndexedDB; en el estado solo viaja un ID (fotoId /
+// escudoId). Caché en memoria para poder renderizar de forma síncrona.
+let _photoDB = null;
+const _photoCache = {};
+
+function _pdb(){
+  return new Promise((res, rej) => {
+    if (_photoDB) return res(_photoDB);
+    const rq = indexedDB.open('pruevacero_photos', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('photos');
+    rq.onsuccess = () => { _photoDB = rq.result; res(_photoDB); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function savePhoto(dataUrl, id){
+  id = id || ('ph' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
+  _photoCache[id] = dataUrl;
+  _pdb().then(db => {
+    db.transaction('photos', 'readwrite').objectStore('photos').put(dataUrl, id);
+  }).catch(() => {});
+  return id;
+}
+function deletePhoto(id){
+  if (!id) return;
+  delete _photoCache[id];
+  _pdb().then(db => {
+    db.transaction('photos', 'readwrite').objectStore('photos').delete(id);
+  }).catch(() => {});
+}
+function getPhoto(id){ return id ? (_photoCache[id] || null) : null; }
+function hydratePhotoCache(){
+  return _pdb().then(db => new Promise(res => {
+    const tx = db.transaction('photos');
+    const st = tx.objectStore('photos');
+    const rk = st.getAllKeys(), rv = st.getAll();
+    tx.oncomplete = () => {
+      (rk.result || []).forEach((k, i) => { _photoCache[k] = rv.result[i]; });
+      res();
+    };
+    tx.onerror = () => res();
+  })).catch(() => {});
+}
+// Achica la imagen con canvas (JPEG) para no llenar el almacenamiento.
+function pickImage(file, maxSide, cb){
+  const rd = new FileReader();
+  rd.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      const k = Math.min(1, maxSide / Math.max(w, h));
+      w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(cv.toDataURL('image/jpeg', 0.82)); }
+      catch(e){ toast('No se pudo procesar la imagen', true); }
+    };
+    img.onerror = () => toast('No se pudo leer la imagen', true);
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+function avatarHtml(p){
+  const du = getPhoto(p.fotoId);
+  if (du) return '<div class="avatar"><img src="' + du + '" alt=""></div>';
+  const ini = ((p.nombre[0] || '') + ((p.apellido || '')[0] || '')).toUpperCase() || '?';
+  return '<div class="avatar">' + esc(ini) + '</div>';
+}
+function teamLogoHtml(t){
+  const du = getPhoto(t && t.escudoId);
+  return '<div class="t-logo">' + (du ? '<img src="' + du + '" alt="">' : '🛡️') + '</div>';
+}
+/* foto del jugador (desde la ficha) */
+function fichaPhotoClick(){ document.getElementById('filePhotoPlayer').click(); }
+function photoPlayerFile(ev){
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f || !fichaId) return;
+  pickImage(f, 320, du => {
+    const p = S.players.find(x => x.id === fichaId);
+    if (!p) return;
+    if (p.fotoId) deletePhoto(p.fotoId);
+    p.fotoId = savePhoto(du);
+    saveData();
+    openFicha(p.id);
+    renderPlayers();
+    toast('Foto guardada');
+  });
+}
+function fichaPhotoRemove(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p || !p.fotoId) return;
+  deletePhoto(p.fotoId);
+  p.fotoId = null;
+  saveData();
+  openFicha(p.id);
+  renderPlayers();
+  toast('Foto quitada');
+}
+/* escudo del equipo (desde Mis equipos) */
+let _logoTeamId = null;
+function teamLogoPick(id){ _logoTeamId = id; document.getElementById('fileLogoTeam').click(); }
+function logoTeamFile(ev){
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f || !_logoTeamId) return;
+  pickImage(f, 200, du => {
+    const t = S.teams.find(x => x.id === _logoTeamId);
+    if (!t) return;
+    if (t.escudoId) deletePhoto(t.escudoId);
+    t.escudoId = savePhoto(du);
+    saveData();
+    renderTeams(); renderTeamBar();
+    toast('Escudo guardado');
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/ui.js ===== Tema, pestañas, overlays
    ═══════════════════════════════════════════════════════════════════ */
 function applyTheme(t){
@@ -682,6 +840,8 @@ function teamPlayers(teamId){
 function renderTeamBar(){
   const t = activeTeam();
   document.getElementById('teamPillName').textContent = t ? t.nombre : 'Sin equipo';
+  const du = t ? getPhoto(t.escudoId) : null;
+  document.getElementById('teamPillLogo').innerHTML = du ? '<img class="pill-logo" src="' + du + '" alt="">' : '';
 }
 function openTeamOverlay(){
   renderTeams();
@@ -695,12 +855,16 @@ function renderTeams(){
   }
   box.innerHTML = S.teams.map(t => {
     const n = teamPlayers(t.id).length;
+    const nc = teamCats(t).length;
     return '<div class="team-item' + (t.id === UI.teamId ? ' on' : '') + '">' +
+      teamLogoHtml(t) +
       '<button class="t-main" onclick="teamPick(\'' + t.id + '\')">' +
         '<div class="t-name">' + esc(t.nombre) + (t.id === UI.teamId ? ' ✓' : '') + '</div>' +
-        '<div class="t-sub">' + n + ' jugador' + (n === 1 ? '' : 'es') + '</div>' +
+        '<div class="t-sub">' + n + ' jugador' + (n === 1 ? '' : 'es') + (nc ? ' · ' + nc + ' categoría' + (nc === 1 ? '' : 's') : '') + '</div>' +
       '</button>' +
       '<div class="t-act">' +
+        '<button onclick="openCatsManager(\'' + t.id + '\')" title="Categorías">📂</button>' +
+        '<button onclick="teamLogoPick(\'' + t.id + '\')" title="Escudo">🛡️</button>' +
         '<button onclick="teamRename(\'' + t.id + '\')" title="Renombrar">✏️</button>' +
         '<button onclick="teamDelete(\'' + t.id + '\')" title="Borrar">🗑</button>' +
       '</div></div>';
@@ -740,6 +904,7 @@ async function teamDelete(id){
   }
   const ok = await appConfirm('Borrar equipo', '¿Borrar "' + t.nombre + '"? Esta acción no se puede deshacer.', { okLabel:'Borrar', danger:true });
   if (!ok) return;
+  if (t.escudoId) deletePhoto(t.escudoId);
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
@@ -747,10 +912,95 @@ async function teamDelete(id){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/cats.js ===== Categorías dentro del equipo (rango de años)
+   ═══════════════════════════════════════════════════════════════════ */
+let catsTeamId = null;   // equipo abierto en el gestor de categorías
+let catFormId = null;    // categoría en edición
+
+function teamCats(t){ return (t && t.categorias) || []; }
+function catForYear(t, y){ return teamCats(t).find(c => y >= c.desde && y <= c.hasta) || null; }
+function playerCat(t, p){
+  const y = Number(catOf(p));
+  return y ? catForYear(t, y) : null;
+}
+// Etiqueta de categoría: la del equipo si el año cae en una, si no el año.
+function catLabelFor(t, p){
+  const c = playerCat(t, p);
+  return c ? c.nombre : catOf(p);
+}
+function openCatsManager(teamId){
+  catsTeamId = teamId;
+  renderCatsList();
+  openOverlay('ovCats');
+}
+function renderCatsList(){
+  const t = S.teams.find(x => x.id === catsTeamId);
+  if (!t) return;
+  document.getElementById('catsTitle').textContent = 'Categorías · ' + t.nombre;
+  const cats = teamCats(t);
+  document.getElementById('catsList').innerHTML = cats.length ? cats.map(c => {
+    const n = teamPlayers(t.id).filter(p => playerCat(t, p) === c).length;
+    return '<div class="team-item"><div class="t-main">' +
+      '<div class="t-name">' + esc(c.nombre) + '</div>' +
+      '<div class="t-sub">nacidos ' + c.desde + (c.hasta !== c.desde ? ' a ' + c.hasta : '') + ' · ' + n + ' jugador' + (n === 1 ? '' : 'es') + '</div></div>' +
+      '<div class="t-act">' +
+        '<button onclick="openCatForm(\'' + c.id + '\')" title="Editar">✏️</button>' +
+        '<button onclick="catDelete(\'' + c.id + '\')" title="Borrar">🗑</button>' +
+      '</div></div>';
+  }).join('') : '<div class="empty">Sin categorías definidas.<br><br>Sin categorías, la app muestra el año de<br>nacimiento tal cual (ej. 2012).</div>';
+}
+function openCatForm(id){
+  catFormId = id || null;
+  const t = S.teams.find(x => x.id === catsTeamId);
+  if (!t) return;
+  const c = id ? teamCats(t).find(x => x.id === id) : null;
+  document.getElementById('cfTitle').textContent = c ? 'Editar categoría' : 'Nueva categoría';
+  document.getElementById('cfNombre').value = c ? c.nombre : '';
+  document.getElementById('cfDesde').value = c ? c.desde : '';
+  document.getElementById('cfHasta').value = c ? c.hasta : '';
+  openOverlay('ovCatForm');
+}
+function saveCat(){
+  const t = S.teams.find(x => x.id === catsTeamId);
+  if (!t) return;
+  const nombre = document.getElementById('cfNombre').value.trim();
+  const desde = Number(document.getElementById('cfDesde').value);
+  let hasta = Number(document.getElementById('cfHasta').value);
+  if (!nombre){ toast('Falta el nombre de la categoría', true); return; }
+  if (!desde || desde < 1940 || desde > 2100){ toast('Año "desde" inválido', true); return; }
+  if (!hasta) hasta = desde;
+  if (hasta < desde){ toast('"Hasta" no puede ser menor que "desde"', true); return; }
+  t.categorias = t.categorias || [];
+  let c = catFormId ? t.categorias.find(x => x.id === catFormId) : null;
+  if (!c){ c = { id:uid() }; t.categorias.push(c); }
+  c.nombre = nombre; c.desde = desde; c.hasta = hasta;
+  saveData();
+  closeOverlay('ovCatForm');
+  renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
+  toast('Categoría guardada');
+}
+async function catDelete(id){
+  const t = S.teams.find(x => x.id === catsTeamId);
+  if (!t) return;
+  const c = teamCats(t).find(x => x.id === id);
+  if (!c) return;
+  const ok = await appConfirm('Borrar categoría',
+    '¿Borrar "' + c.nombre + '"? Los partidos que la usaban quedan sin categoría (muestran todo el plantel).',
+    { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  t.categorias = t.categorias.filter(x => x.id !== id);
+  S.matches.forEach(m => { if (m.teamId === t.id && m.categoria === id) m.categoria = null; });
+  if (jugCat === id) jugCat = '';
+  saveData();
+  renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/players.js ===== Jugadores: lista, ficha, alta/edición
    ═══════════════════════════════════════════════════════════════════ */
 let jugSearch = '';
 let jugLinea = '';
+let jugCat = '';
 let editingId = null;   // jugador en edición en el form
 let fichaId = null;     // jugador abierto en la ficha
 
@@ -773,15 +1023,25 @@ function renderPlayers(){
     (l ? LINEAS[l] + 's' : 'Todos') + '</button>'
   ).join('');
 
+  const cats = teamCats(t);
+  if (jugCat && !cats.some(c => c.id === jugCat)) jugCat = '';
+  const catChips = cats.length
+    ? '<div class="chips">' +
+      '<button class="chip' + (jugCat === '' ? ' on' : '') + '" onclick="setCatFilter(\'\')">Todas las cat.</button>' +
+      cats.map(c => '<button class="chip' + (jugCat === c.id ? ' on' : '') + '" onclick="setCatFilter(\'' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
+      '</div>'
+    : '';
+
   let list = teamPlayers(t.id);
   const q = jugSearch.trim().toLowerCase();
   if (q) list = list.filter(p => (p.nombre + ' ' + (p.apellido || '')).toLowerCase().includes(q));
   if (jugLinea) list = list.filter(p => p.posicion && p.posicion.linea === jugLinea);
+  if (jugCat) list = list.filter(p => { const c = playerCat(t, p); return c && c.id === jugCat; });
   list.sort((a, b) => (a.apellido + a.nombre).localeCompare(b.apellido + b.nombre, 'es'));
 
   let html =
     '<div class="toolbar"><input placeholder="🔍 Buscar jugador…" value="' + esc(jugSearch) + '" oninput="jugSearchInput(this.value)"></div>' +
-    '<div class="chips">' + chips + '</div>';
+    '<div class="chips">' + chips + '</div>' + catChips;
 
   if (!teamPlayers(t.id).length){
     html += '<div class="empty"><div class="big">👤</div>Todavía no hay jugadores en <b>' + esc(t.nombre) + '</b>.<br>Agregá el primero con el botón ＋.</div>';
@@ -789,16 +1049,15 @@ function renderPlayers(){
     html += '<div class="empty">No hay jugadores que coincidan con la búsqueda.</div>';
   } else {
     html += list.map(p => {
-      const ini = (p.nombre[0] || '') + ((p.apellido || '')[0] || '');
       const e = edad(p.nacimiento);
       const partes = [];
       if (e != null) partes.push(e + ' años');
       const pos = posLabel(p);
       if (pos) partes.push(pos);
       if (!p.nacimiento) partes.push('⚠️ falta fecha de nac.');
-      const cat = catOf(p);
+      const cat = catLabelFor(t, p);
       return '<button class="player-card" onclick="openFicha(\'' + p.id + '\')">' +
-        '<div class="avatar">' + esc(ini.toUpperCase() || '?') + '</div>' +
+        avatarHtml(p) +
         '<div class="pc-info"><div class="pc-name">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' +
         '<div class="pc-sub">' + esc(partes.join(' · ') || 'Sin datos') + '</div></div>' +
         (cat ? '<div class="pc-cat">' + esc(cat) + '</div>' : '') +
@@ -810,6 +1069,7 @@ function renderPlayers(){
 }
 function jugSearchInput(v){ jugSearch = v; renderPlayers(); const inp = document.querySelector('#jugContent .toolbar input'); if (inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); } }
 function setLineaFilter(l){ jugLinea = l; renderPlayers(); }
+function setCatFilter(id){ jugCat = id; renderPlayers(); }
 
 /* --- formulario alta / edición --- */
 function pfLineaChange(){
@@ -899,7 +1159,7 @@ function openFicha(id){
   if (!p) return;
   fichaId = id;
   const e = edad(p.nacimiento);
-  const cat = catOf(p);
+  const cat = catLabelFor(S.teams.find(t => t.id === p.teamId), p);
   const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
   const otros = p.antecedentes.otrosDeportes;
   const otherTeams = S.teams.filter(t => t.id !== p.teamId);
@@ -917,9 +1177,11 @@ function openFicha(id){
 
   document.getElementById('fichaBody').innerHTML =
     '<div class="ficha-hero">' +
-      '<div class="avatar">' + esc(((p.nombre[0] || '') + ((p.apellido || '')[0] || '')).toUpperCase() || '?') + '</div>' +
+      '<button onclick="fichaPhotoClick()" title="Cambiar foto" style="border-radius:50%">' + avatarHtml(p) + '</button>' +
       '<div><h2>' + esc(p.nombre + ' ' + (p.apellido || '')) + '</h2>' +
-      '<div class="sub">' + (cat ? 'Categoría ' + esc(cat) + ' · ' : '') + (e != null ? e + ' años' : 'sin fecha de nacimiento') + '</div></div>' +
+      '<div class="sub">' + (cat ? 'Categoría ' + esc(cat) + ' · ' : '') + (e != null ? e + ' años' : 'sin fecha de nacimiento') + '</div>' +
+      '<div class="sub" style="margin-top:5px">📷 <a href="javascript:fichaPhotoClick()" style="color:var(--accent)">' + (p.fotoId ? 'cambiar foto' : 'ponerle foto') + '</a>' +
+      (p.fotoId ? ' · <a href="javascript:fichaPhotoRemove()" style="color:var(--danger)">quitar</a>' : '') + '</div></div>' +
     '</div>' +
 
     '<div class="card"><h3>📋 Datos</h3><div class="datagrid">' +
@@ -1004,6 +1266,8 @@ function exportPlayer(){
   const p = S.players.find(x => x.id === fichaId);
   if (!p) return;
   const payload = { _app:'PruevaCero', _type:'pc_player_v1', _version:1, _exportedAt:new Date().toISOString(), player:p };
+  const du = getPhoto(p.fotoId);
+  if (du) payload.photo = du;
   const fn = ('jugador-' + p.nombre + '-' + (p.apellido || '')).replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ-]+/g, '-') + '.json';
   download(fn, JSON.stringify(payload, null, 2));
   toast('Ficha exportada');
@@ -1015,6 +1279,7 @@ async function deletePlayerAsk(){
     '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + '? Se pierde su ficha completa. Si puede volver, conviene "Exportar ficha" antes.',
     { okLabel:'Eliminar', danger:true });
   if (!ok) return;
+  if (p.fotoId) deletePhoto(p.fotoId);
   S.players = S.players.filter(x => x.id !== fichaId);
   saveData();
   closeOverlay('ovFicha');
@@ -1043,6 +1308,7 @@ function importPlayerFile(ev){
       p.lateralidad = p.lateralidad || { pie:'', mano:'', ojo:'' };
       p.antecedentes = p.antecedentes || { aniosPractica:null, otrosDeportes:'' };
       p.posicion = p.posicion || { linea:'', rol:'' };
+      p.fotoId = j.photo ? savePhoto(j.photo) : null;   // la foto viaja en el archivo
       S.players.push(p);
       saveData();
       switchTab('jugadores');
@@ -1480,9 +1746,10 @@ function renderPartidos(){
     html += matches.map(m => {
       const res = (m.golesFavor != null && m.golesContra != null) ? m.golesFavor + ' - ' + m.golesContra : 'sin resultado';
       const n = Object.keys(participantsOf(m)).length;
+      const mc = m.categoria ? teamCats(t).find(c => c.id === m.categoria) : null;
       return '<button class="player-card" onclick="openMatch(\'' + m.id + '\')">' +
         '<div class="avatar">⚽</div>' +
-        '<div class="pc-info"><div class="pc-name">vs ' + esc(m.rival || 'Rival') + '</div>' +
+        '<div class="pc-info"><div class="pc-name">vs ' + esc(m.rival || 'Rival') + (mc ? ' <span style="color:var(--accent);font-size:12px">' + esc(mc.nombre) + '</span>' : '') + '</div>' +
         '<div class="pc-sub">' + fmtFecha(m.fecha) + ' · ' + res + ' · ' + n + ' jugaron</div></div>' +
         '</button>';
     }).join('');
@@ -1494,7 +1761,7 @@ function matchCreate(){
   if (!t){ toast('Primero creá un equipo', true); return; }
   const prev = S.matches.filter(m => m.teamId === t.id).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
   const m = {
-    id:uid(), teamId:t.id, fecha:todayISO(), rival:'',
+    id:uid(), teamId:t.id, fecha:todayISO(), rival:'', categoria:null,
     golesFavor:null, golesContra:null,
     duracion:(prev && prev.duracion) || 60,
     titulares:[], cambios:[], stats:{}
@@ -1525,8 +1792,9 @@ function matchField(k, v){
     const n = v === '' ? null : Number(v);
     m[k === 'gf' ? 'golesFavor' : 'golesContra'] = (n === null || isNaN(n) || n < 0) ? null : n;
   }
+  else if (k === 'categoria') m.categoria = v || null;
   saveData();
-  if (k === 'duracion') renderMatch();   // cambia los minutos calculados
+  if (k === 'duracion' || k === 'categoria') renderMatch();   // cambian plantel o minutos
 }
 async function matchDelete(){
   const m = curMatch();
@@ -1593,16 +1861,29 @@ function renderMatch(){
   const m = curMatch();
   if (!m) return;
   const dur = m.duracion || 60;
-  const players = teamPlayers(m.teamId)
+  const team = S.teams.find(x => x.id === m.teamId);
+  const allPlayers = teamPlayers(m.teamId)
     .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  const mcat = (m.categoria && teamCats(team).find(c => c.id === m.categoria)) || null;
+  // El plantel del partido se filtra por la categoría elegida
+  const players = mcat
+    ? allPlayers.filter(p => { const c = playerCat(team, p); return c && c.id === mcat.id; })
+    : allPlayers;
   const parts = participantsOf(m);
   const onField = onFieldNow(m);
 
   /* Datos */
+  const catSel = teamCats(team).length
+    ? '<div class="full"><label>Categoría del partido</label><select onchange="matchField(\'categoria\', this.value)">' +
+      '<option value="">Todo el equipo</option>' +
+      teamCats(team).map(c => '<option value="' + c.id + '"' + (m.categoria === c.id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') +
+      '</select></div>'
+    : '';
   let html =
     '<div class="card"><h3>📋 Datos del partido</h3><div class="form-grid">' +
       '<div><label style="margin-top:6px">Fecha</label><input type="date" value="' + esc(m.fecha) + '" onchange="matchField(\'fecha\', this.value)"></div>' +
       '<div><label style="margin-top:6px">Duración (min)</label><input type="number" inputmode="numeric" min="1" value="' + esc(dur) + '" onchange="matchField(\'duracion\', this.value)"></div>' +
+      catSel +
       '<div class="full"><label>Rival</label><input value="' + esc(m.rival) + '" onchange="matchField(\'rival\', this.value)" placeholder="Nombre del rival" autocomplete="off"></div>' +
       '<div><label>Goles nuestros</label><input type="number" inputmode="numeric" min="0" value="' + (m.golesFavor != null ? m.golesFavor : '') + '" onchange="matchField(\'gf\', this.value)"></div>' +
       '<div><label>Goles rival</label><input type="number" inputmode="numeric" min="0" value="' + (m.golesContra != null ? m.golesContra : '') + '" onchange="matchField(\'gc\', this.value)"></div>' +
@@ -1610,7 +1891,9 @@ function renderMatch(){
 
   /* Titulares */
   if (!players.length){
-    html += '<div class="card"><h3>👥 Equipo</h3><p class="hint">No hay jugadores en este equipo todavía: cargalos en la pestaña Jugadores.</p></div>';
+    html += '<div class="card"><h3>👥 Equipo</h3><p class="hint">' +
+      (mcat ? 'No hay jugadores de la categoría "' + esc(mcat.nombre) + '" en este equipo.' :
+              'No hay jugadores en este equipo todavía: cargalos en la pestaña Jugadores.') + '</p></div>';
   } else {
     html += '<div class="card"><h3>👥 Titulares (' + (m.titulares || []).length + ')</h3>' +
       '<p class="hint">Tocá para marcar quién arranca el partido. Los que entran después se cargan como cambio.</p>' +
@@ -1648,8 +1931,8 @@ function renderMatch(){
   }
   html += '</div>';
 
-  /* Planilla de los que jugaron */
-  const jugaron = players.filter(p => parts[p.id]);
+  /* Planilla de los que jugaron (roster completo: cubre movidos/fuera de categoría) */
+  const jugaron = allPlayers.filter(p => parts[p.id]);
   html += '<div class="card"><h3>📝 Planilla (' + jugaron.length + ' jugaron)</h3>';
   if (!jugaron.length){
     html += '<p class="hint">Marcá titulares o cargá cambios y acá aparecen los que jugaron, para anotarles goles, tarjetas y faltas. Los minutos se calculan solos.</p>';
@@ -1689,6 +1972,11 @@ function renderMatch(){
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
   const payload = { _app:'PruevaCero', _type:'pc_backup_v1', _version:1, _exportedAt:new Date().toISOString(), data:S };
+  // Las fotos viven en IndexedDB: van adjuntas para sobrevivir un cambio de dispositivo
+  const photos = {};
+  S.players.forEach(p => { const d = getPhoto(p.fotoId); if (d) photos[p.fotoId] = d; });
+  S.teams.forEach(t => { const d = getPhoto(t.escudoId); if (d) photos[t.escudoId] = d; });
+  if (Object.keys(photos).length) payload.photos = photos;
   download('pruevacero-backup-' + todayISO() + '.json', JSON.stringify(payload, null, 2));
   toast('Copia de seguridad descargada');
 }
@@ -1905,6 +2193,7 @@ function importBackupFile(ev){
         ' jugadores) por los del archivo (' + j.data.teams.length + ' equipos, ' + (j.data.players || []).length + ' jugadores). ¿Seguir?',
         { okLabel:'Reemplazar', danger:true });
       if (!ok) return;
+      if (j.photos) Object.keys(j.photos).forEach(id => savePhoto(j.photos[id], id));
       S = j.data;
       S.players = S.players || [];
       S.testDefs = S.testDefs || DEF_TESTDEFS.slice();
@@ -1933,6 +2222,13 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTeamBar();
   renderPlayers();
   switchTab(UI.tab && document.getElementById('tab-' + UI.tab) ? UI.tab : 'jugadores');
+
+  // Fotos: cuando la caché de IndexedDB está lista, re-render con imágenes
+  hydratePhotoCache().then(() => {
+    renderTeamBar();
+    renderPlayers();
+    if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
+  });
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(() => {});
