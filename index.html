@@ -212,6 +212,19 @@ html[data-theme="light"] .btn{color:#fff}
 .toast.err{border-color:var(--danger)}
 @keyframes tin{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 
+/* ============================ ASISTENCIA ============================ */
+.att-chip{
+  flex:none;min-width:44px;text-align:center;font-size:13px;font-weight:800;
+  border-radius:9px;padding:8px 10px;background:var(--surface2);color:var(--muted);
+}
+.att-chip.P{background:var(--accent-dim);color:var(--accent)}
+.att-chip.A{background:rgba(239,68,68,.15);color:var(--danger)}
+.att-chip.L{background:rgba(245,158,11,.15);color:var(--warn)}
+.att-pct{font-weight:800}
+.att-pct.ok{color:var(--accent)}
+.att-pct.mid{color:var(--warn)}
+.att-pct.low{color:var(--danger)}
+
 /* ============================ ESTADÍSTICAS ============================ */
 .sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:12px}
 .sum-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 8px;text-align:center}
@@ -279,6 +292,11 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
     <div id="partidosContent"></div>
   </section>
 
+  <!-- ══════════════ PESTAÑA CLASES (ASISTENCIA) ══════════════ -->
+  <section class="tab" id="tab-clases">
+    <div id="clasesContent"></div>
+  </section>
+
   <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
   <section class="tab" id="tab-stats">
     <div id="statsContent"></div>
@@ -336,6 +354,7 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   <button class="active" id="nav-jugadores" onclick="switchTab('jugadores')"><span class="ic">👤</span>Jugadores</button>
   <button id="nav-pruebas" onclick="switchTab('pruebas')"><span class="ic">💪</span>Pruebas</button>
   <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
+  <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Clases</button>
   <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
   <button id="nav-config" onclick="switchTab('config')"><span class="ic">⚙️</span>Config</button>
 </nav>
@@ -493,10 +512,24 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
     <div><label>Nacidos desde (año) *</label><input id="cfDesde" type="number" inputmode="numeric" min="1940" max="2100" placeholder="2012"></div>
     <div><label>Hasta (año)</label><input id="cfHasta" type="number" inputmode="numeric" min="1940" max="2100" placeholder="igual que desde"></div>
   </div>
+  <label>Días de clase (entrenamiento)</label>
+  <div class="chips" id="cfDias"></div>
+  <label>Hora de la clase</label>
+  <input id="cfHora" type="time">
   <div class="btn-row">
     <button class="btn sec" onclick="closeOverlay('ovCatForm')">Cancelar</button>
     <button class="btn" onclick="saveCat()">Guardar</button>
   </div>
+</div>
+
+<!-- ══════════════ OVERLAY LISTA DE ASISTENCIA ══════════════ -->
+<div class="overlay" id="ovAsis">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeAsis()">←</button>
+    <h2 id="asisTitle">Asistencia</h2>
+    <button class="icon-btn" onclick="asisDelete()" title="Borrar esta lista">🗑</button>
+  </div>
+  <div id="asisBody"></div>
 </div>
 
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
@@ -559,11 +592,12 @@ function loadData(){
         d.testDefs     = d.testDefs     || DEF_TESTDEFS.slice();
         d.testSessions = d.testSessions || [];
         d.matches      = d.matches      || [];
+        d.attendance   = d.attendance   || [];
         return d;
       }
     }
   } catch(e){}
-  return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[] };
+  return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[] };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -823,6 +857,7 @@ function switchTab(t){
   if (t === 'pruebas') renderPruebas();
   if (t === 'partidos') renderPartidos();
   if (t === 'stats') renderStats();
+  if (t === 'clases') renderClases();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
@@ -877,12 +912,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -908,7 +943,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -958,7 +993,21 @@ function openCatForm(id){
   document.getElementById('cfNombre').value = c ? c.nombre : '';
   document.getElementById('cfDesde').value = c ? c.desde : '';
   document.getElementById('cfHasta').value = c ? c.hasta : '';
+  catFormDias = (c && c.dias) ? c.dias.slice() : [];
+  document.getElementById('cfHora').value = (c && c.hora) || '';
+  cfRenderDias();
   openOverlay('ovCatForm');
+}
+let catFormDias = [];
+const DIAS_CORTOS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'];
+function cfRenderDias(){
+  document.getElementById('cfDias').innerHTML = DIAS_CORTOS.map((d, i) =>
+    '<button class="chip' + (catFormDias.includes(i) ? ' on' : '') + '" onclick="cfToggleDia(' + i + ')">' + d + '</button>').join('');
+}
+function cfToggleDia(i){
+  const ix = catFormDias.indexOf(i);
+  if (ix >= 0) catFormDias.splice(ix, 1); else catFormDias.push(i);
+  cfRenderDias();
 }
 function saveCat(){
   const t = S.teams.find(x => x.id === catsTeamId);
@@ -974,9 +1023,11 @@ function saveCat(){
   let c = catFormId ? t.categorias.find(x => x.id === catFormId) : null;
   if (!c){ c = { id:uid() }; t.categorias.push(c); }
   c.nombre = nombre; c.desde = desde; c.hasta = hasta;
+  c.dias = catFormDias.slice().sort();
+  c.hora = document.getElementById('cfHora').value || '';
   saveData();
   closeOverlay('ovCatForm');
-  renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
+  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderTeams();
   toast('Categoría guardada');
 }
 async function catDelete(id){
@@ -1210,6 +1261,8 @@ function openFicha(id){
     '</div></div>' +
 
     renderMatchSummary(p) +
+
+    renderAttSummary(p) +
 
     renderEvolution(p) +
 
@@ -1968,6 +2021,229 @@ function renderMatch(){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/attendance.js ===== Asistencia a clases (pestaña 🗓️ Clases)
+   ═══════════════════════════════════════════════════════════════════ */
+let claseCat = '';        // categoría elegida en la pestaña Clases ('' = todo el equipo)
+let asisOpenId = null;    // lista de asistencia abierta
+
+function dowOf(iso){
+  const p = String(iso).split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]).getDay();
+}
+function curAsis(){ return S.attendance.find(a => a.id === asisOpenId) || null; }
+function attFind(teamId, catId, fecha){
+  return S.attendance.find(a => a.teamId === teamId && (a.catId || null) === (catId || null) && a.fecha === fecha) || null;
+}
+// Jugadores de la lista: los de la categoría (o equipo) + los ya marcados
+function attPlayers(a){
+  const t = S.teams.find(x => x.id === a.teamId);
+  const cat = a.catId ? teamCats(t).find(c => c.id === a.catId) : null;
+  const marks = a.marks || {};
+  const list = S.players.filter(p => {
+    if (marks[p.id] !== undefined) return true;
+    if (p.teamId !== a.teamId) return false;
+    if (!cat) return true;
+    const pc = playerCat(t, p);
+    return pc && pc.id === cat.id;
+  });
+  list.sort((x, y) => ((x.apellido || '') + x.nombre).localeCompare((y.apellido || '') + y.nombre, 'es'));
+  return list;
+}
+function attStatsFor(teamId, catId, pid){
+  let P = 0, A = 0, L = 0;
+  S.attendance.forEach(a => {
+    if (a.teamId !== teamId || (a.catId || null) !== (catId || null)) return;
+    const m = (a.marks || {})[pid];
+    if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
+  });
+  const base = P + A;
+  return { P, A, L, pct: base ? Math.round(P * 100 / base) : null };
+}
+function setClaseCat(id){ claseCat = id; renderClases(); }
+
+function renderClases(){
+  const box = document.getElementById('clasesContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">🗓️</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    return;
+  }
+  const cats = teamCats(t);
+  if (claseCat && !cats.some(c => c.id === claseCat)) claseCat = '';
+  const ccat = claseCat ? cats.find(c => c.id === claseCat) : null;
+
+  let html = '';
+  if (cats.length){
+    html += '<div class="chips">' +
+      '<button class="chip' + (claseCat === '' ? ' on' : '') + '" onclick="setClaseCat(\'\')">Todo el equipo</button>' +
+      cats.map(c => '<button class="chip' + (claseCat === c.id ? ' on' : '') + '" onclick="setClaseCat(\'' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
+      '</div>';
+  }
+
+  const hoy = todayISO();
+  let schedTxt = '';
+  if (ccat){
+    if (ccat.dias && ccat.dias.length){
+      schedTxt = 'Clases: ' + ccat.dias.slice().sort().map(i => DIAS_CORTOS[i]).join(', ') + (ccat.hora ? ' · ' + esc(ccat.hora) + ' hs' : '');
+      schedTxt += ccat.dias.includes(dowOf(hoy))
+        ? ' — <b style="color:var(--accent)">hoy hay clase ✔</b>'
+        : ' — hoy no hay clase programada';
+    } else {
+      schedTxt = 'Sin días de clase configurados (se cargan editando la categoría en 📂 del equipo).';
+    }
+  }
+  html += '<div class="card"><h3>📋 Pasar lista' + (ccat ? ' · ' + esc(ccat.nombre) : '') + '</h3>' +
+    (schedTxt ? '<p class="hint">' + schedTxt + '</p>' : '') +
+    '<div class="btn-row" style="margin-top:10px"><button class="btn" onclick="openAsis(\'' + hoy + '\')">📋 Pasar lista de HOY (' + fmtFecha(hoy) + ')</button></div>' +
+    '<label>Otra fecha (cargar o corregir un día que no se pasó lista)</label>' +
+    '<div class="med-row" style="margin-top:0">' +
+      '<div><input type="date" id="asisFecha" value="' + hoy + '" max="' + hoy + '"></div>' +
+      '<button class="btn mini" onclick="openAsis(document.getElementById(\'asisFecha\').value)">Abrir</button>' +
+    '</div></div>';
+
+  const sheets = S.attendance
+    .filter(a => a.teamId === t.id && (a.catId || null) === (claseCat || null))
+    .sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)));
+  html += '<div class="card"><h3>🗓️ Listas cargadas</h3>';
+  if (!sheets.length){
+    html += '<p class="hint">Todavía no pasaste lista' + (ccat ? ' en esta categoría' : '') + '. Tocá el botón de arriba y marcá a cada jugador.</p>';
+  } else {
+    html += sheets.slice(0, 30).map(a => {
+      let P = 0, A = 0, L = 0;
+      Object.keys(a.marks || {}).forEach(pid => {
+        const m = a.marks[pid];
+        if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
+      });
+      return '<button class="mp-row" onclick="openAsisId(\'' + a.id + '\')">' +
+        '<div class="nm">' + fmtFecha(a.fecha) + '</div>' +
+        '<div class="mm">✔' + P + ' · ✘' + A + (L ? ' · 🤕' + L : '') + '</div></button>';
+    }).join('');
+  }
+  html += '</div>';
+
+  const roster = S.players
+    .filter(p => p.teamId === t.id && (!ccat || ((playerCat(t, p) || {}).id === ccat.id)))
+    .sort((x, y) => ((x.apellido || '') + x.nombre).localeCompare((y.apellido || '') + y.nombre, 'es'));
+  const rows = roster
+    .map(p => ({ p: p, st: attStatsFor(t.id, claseCat || null, p.id) }))
+    .filter(r => (r.st.P + r.st.A + r.st.L) > 0);
+  if (rows.length){
+    html += '<div class="card"><h3>📈 Asistencia por jugador</h3>' +
+      rows.map(r => {
+        const cls = r.st.pct == null ? '' : (r.st.pct >= 80 ? 'ok' : (r.st.pct >= 60 ? 'mid' : 'low'));
+        return '<div class="mp-row"><div class="nm">' + esc(r.p.nombre + ' ' + (r.p.apellido || '')) + '</div>' +
+          '<div class="mm">✔' + r.st.P + ' ✘' + r.st.A + (r.st.L ? ' 🤕' + r.st.L : '') + '</div>' +
+          (r.st.pct != null ? '<div class="att-pct ' + cls + '">' + r.st.pct + '%</div>' : '') +
+          '</div>';
+      }).join('') +
+      '<p class="hint" style="margin-top:8px">El % no cuenta los días lesionado. Sirve de referencia para decidir titularidades.</p></div>';
+  }
+  box.innerHTML = html;
+}
+
+function openAsis(fecha){
+  if (!fecha){ toast('Elegí una fecha', true); return; }
+  const t = activeTeam();
+  if (!t) return;
+  let a = attFind(t.id, claseCat || null, fecha);
+  if (!a){
+    a = { id:uid(), teamId:t.id, catId:claseCat || null, fecha:fecha, marks:{} };
+    S.attendance.push(a);
+    saveData();
+  }
+  asisOpenId = a.id;
+  renderAsis();
+  openOverlay('ovAsis');
+}
+function openAsisId(id){
+  asisOpenId = id;
+  renderAsis();
+  openOverlay('ovAsis');
+}
+function closeAsis(){
+  closeOverlay('ovAsis');
+  asisOpenId = null;
+  renderClases();
+}
+function renderAsis(){
+  const a = curAsis();
+  if (!a) return;
+  const t = S.teams.find(x => x.id === a.teamId);
+  const cat = a.catId ? teamCats(t).find(c => c.id === a.catId) : null;
+  document.getElementById('asisTitle').textContent = 'Lista · ' + fmtFecha(a.fecha) + (cat ? ' · ' + cat.nombre : '');
+  const players = attPlayers(a);
+  let P = 0, A = 0, L = 0;
+  players.forEach(p => {
+    const m = (a.marks || {})[p.id];
+    if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
+  });
+  let html = '<p class="hint">Tocá a cada jugador para marcarlo: ✔ presente → ✘ ausente → 🤕 lesionado → sin marcar. Se guarda solo.</p>' +
+    '<div class="btn-row"><button class="btn sec" onclick="attAllP()">✅ Marcar todos presentes</button></div>';
+  if (!players.length){
+    html += '<div class="empty">No hay jugadores' + (cat ? ' de esta categoría' : '') + ' en el equipo.</div>';
+  } else {
+    html += players.map(p => {
+      const m = (a.marks || {})[p.id] || '';
+      const chip = m === 'P' ? '<span class="att-chip P">✔ P</span>'
+                 : m === 'A' ? '<span class="att-chip A">✘ A</span>'
+                 : m === 'L' ? '<span class="att-chip L">🤕 L</span>'
+                 : '<span class="att-chip">—</span>';
+      return '<button class="mp-row" onclick="attCycle(\'' + p.id + '\')">' +
+        avatarHtml(p) + '<div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' + chip + '</button>';
+    }).join('');
+    html += '<p class="hint" style="text-align:center;margin-top:10px">✔ ' + P + ' presentes · ✘ ' + A + ' ausentes' + (L ? ' · 🤕 ' + L : '') +
+      ' · sin marcar ' + (players.length - P - A - L) + '</p>';
+  }
+  document.getElementById('asisBody').innerHTML = html;
+}
+function attCycle(pid){
+  const a = curAsis();
+  if (!a) return;
+  a.marks = a.marks || {};
+  const cur = a.marks[pid] || '';
+  const next = cur === '' ? 'P' : cur === 'P' ? 'A' : cur === 'A' ? 'L' : '';
+  if (next === '') delete a.marks[pid]; else a.marks[pid] = next;
+  saveData();
+  renderAsis();
+}
+function attAllP(){
+  const a = curAsis();
+  if (!a) return;
+  a.marks = a.marks || {};
+  attPlayers(a).forEach(p => { a.marks[p.id] = 'P'; });
+  saveData();
+  renderAsis();
+}
+async function asisDelete(){
+  const a = curAsis();
+  if (!a) return;
+  const ok = await appConfirm('Borrar lista',
+    '¿Borrar la lista de asistencia del ' + fmtFecha(a.fecha) + '?',
+    { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.attendance = S.attendance.filter(x => x.id !== a.id);
+  saveData();
+  closeAsis();
+}
+// Resumen de asistencia para la ficha del jugador (todas las listas)
+function renderAttSummary(p){
+  let P = 0, A = 0, L = 0;
+  S.attendance.forEach(a => {
+    const m = (a.marks || {})[p.id];
+    if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
+  });
+  if (!(P + A + L)) return '';
+  const base = P + A;
+  const pct = base ? Math.round(P * 100 / base) : null;
+  return '<div class="card"><h3>🗓️ Asistencia a clases</h3><div class="datagrid tri">' +
+    dgi('Presente', P) + dgi('Ausente', A) + dgi('Lesionado', L) +
+    '</div>' +
+    (pct != null ? '<p class="hint" style="margin-top:10px">Asistencia: <b>' + pct + '%</b> (los días lesionado no cuentan para el %)</p>' : '') +
+    '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -2199,9 +2475,10 @@ function importBackupFile(ev){
       S.testDefs = S.testDefs || DEF_TESTDEFS.slice();
       S.testSessions = S.testSessions || [];
       S.matches = S.matches || [];
+      S.attendance = S.attendance || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);

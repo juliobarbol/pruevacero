@@ -62,11 +62,20 @@ automáticos.
 
 ```
 team = { id, nombre, escudoId?,          // escudo en IndexedDB (getPhoto)
-         categorias?: [{ id, nombre, desde, hasta }] }  // rango de años de nacimiento
+         categorias?: [{ id, nombre, desde, hasta,     // rango de años de nacimiento
+                         dias?: [0-6, ...], hora?: 'HH:MM' }] }  // días/hora de clase (0=Do)
 // La categoría de un jugador se deriva: playerCat(team, player) busca la
 // categoría cuyo rango contiene su año de nacimiento; sin match se muestra
 // el año tal cual. Los partidos pueden fijar `categoria` (id) y el plantel
 // de la planilla se filtra solo.
+
+attendance = [ {                 // una lista de asistencia por (equipo, categoría, fecha)
+  id, teamId, catId|null, fecha,
+  marks: { [playerId]: 'P'|'A'|'L' }   // presente / ausente / lesionado
+} ]
+// El % de asistencia = P/(P+A) — los días lesionado no bajan el %.
+// Pestaña 🗓️ Clases: botón "lista de HOY" + abrir cualquier fecha pasada
+// (crea o edita, sin duplicar: attFind por equipo+cat+fecha).
 
 player = {
   id, teamId,                                          // equipo actual
@@ -152,7 +161,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa ordenable + resumen 📊 en la ficha) | HECHA (2026-07-06) |
 | 5 | Exportes Excel con autofiltro (jugadores, estadísticas y jornada de pruebas; SheetJS por CDN) | HECHA (2026-07-06) |
 | 6 | **Categorías dentro del equipo** (rango de años, partidos por categoría, filtro en Jugadores) + **escudo del club** + **foto por jugador** (IndexedDB `pruevacero_photos`, viajan en backup y ficha exportada) | HECHA (2026-07-06) |
-| 7 | **Asistencia a entrenamientos** (por equipo+categoría, días/horas de clase editables, lista del día de hoy accesible, edición retroactiva, % de asistencia) | PENDIENTE |
+| 7 | **Asistencia a entrenamientos** (pestaña 🗓️ Clases: por equipo+categoría, días/horas de clase editables en la categoría, lista de HOY accesible, edición retroactiva, % de asistencia y resumen en la ficha) | HECHA (2026-07-06) |
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
 | 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
