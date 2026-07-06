@@ -61,7 +61,12 @@ automáticos.
 ## Modelo de datos (resumen)
 
 ```
-team = { id, nombre, club?, categoria?, color?, notas }
+team = { id, nombre, escudoId?,          // escudo en IndexedDB (getPhoto)
+         categorias?: [{ id, nombre, desde, hasta }] }  // rango de años de nacimiento
+// La categoría de un jugador se deriva: playerCat(team, player) busca la
+// categoría cuyo rango contiene su año de nacimiento; sin match se muestra
+// el año tal cual. Los partidos pueden fijar `categoria` (id) y el plantel
+// de la planilla se filtra solo.
 
 player = {
   id, teamId,                                          // equipo actual
@@ -146,7 +151,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 3 | Pestaña Partidos (planilla con cambios y eventos) | HECHA (2026-07-05) |
 | 4 | Pestaña Estadísticas (promedios, porcentajes, comparativa ordenable + resumen 📊 en la ficha) | HECHA (2026-07-06) |
 | 5 | Exportes Excel con autofiltro (jugadores, estadísticas y jornada de pruebas; SheetJS por CDN) | HECHA (2026-07-06) |
-| 6 | **Categorías dentro del equipo** + **escudo del club** + **foto por jugador** (pedido 2026-07-06, ver decisiones) | PENDIENTE |
+| 6 | **Categorías dentro del equipo** (rango de años, partidos por categoría, filtro en Jugadores) + **escudo del club** + **foto por jugador** (IndexedDB `pruevacero_photos`, viajan en backup y ficha exportada) | HECHA (2026-07-06) |
 | 7 | **Asistencia a entrenamientos** (por equipo+categoría, días/horas de clase editables, lista del día de hoy accesible, edición retroactiva, % de asistencia) | PENDIENTE |
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría | PENDIENTE |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
