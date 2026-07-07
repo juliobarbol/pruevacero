@@ -403,6 +403,7 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
     <div><label>Nombre *</label><input id="pfNombre" autocomplete="off"></div>
     <div><label>Apellido</label><input id="pfApellido" autocomplete="off"></div>
     <div class="full"><label>Fecha de nacimiento</label><input id="pfNac" type="date"></div>
+    <div class="full"><label>En el club desde (temporada)</label><input id="pfDesde" autocomplete="off" placeholder="Ej: 2024 o 2024/25"></div>
     <div><label>Pie hábil</label>
       <select id="pfPie"><option value="">—</option><option value="derecho">Derecho</option><option value="izquierdo">Izquierdo</option><option value="ambos">Ambos</option></select></div>
     <div><label>Mano hábil</label>
@@ -1216,6 +1217,7 @@ function openPlayerForm(id){
   document.getElementById('pfNombre').value = p ? p.nombre : '';
   document.getElementById('pfApellido').value = p ? (p.apellido || '') : '';
   document.getElementById('pfNac').value = p ? (p.nacimiento || '') : '';
+  document.getElementById('pfDesde').value = p ? (p.desdeTemporada || '') : '';
   document.getElementById('pfPie').value = p ? (p.lateralidad.pie || '') : '';
   document.getElementById('pfMano').value = p ? (p.lateralidad.mano || '') : '';
   document.getElementById('pfOjo').value = p ? (p.lateralidad.ojo || '') : '';
@@ -1241,7 +1243,7 @@ function savePlayer(){
   if (!p){
     p = {
       id: uid(), teamId: t.id,
-      nombre:'', apellido:'', nacimiento:'',
+      nombre:'', apellido:'', nacimiento:'', desdeTemporada:'',
       lateralidad:{ pie:'', mano:'', ojo:'' },
       fisico:{ peso:[], altura:[] },
       antecedentes:{ aniosPractica:null, otrosDeportes:'' },
@@ -1254,6 +1256,7 @@ function savePlayer(){
   p.nombre = nombre;
   p.apellido = document.getElementById('pfApellido').value.trim();
   p.nacimiento = document.getElementById('pfNac').value || '';
+  p.desdeTemporada = document.getElementById('pfDesde').value.trim();
   p.lateralidad.pie = document.getElementById('pfPie').value;
   p.lateralidad.mano = document.getElementById('pfMano').value;
   p.lateralidad.ojo = document.getElementById('pfOjo').value;
@@ -1351,7 +1354,9 @@ function openFicha(id){
 
     (p.notas ? '<div class="card"><h3>📝 Notas</h3><p class="hint" style="white-space:pre-wrap">' + esc(p.notas) + '</p></div>' : '') +
 
-    '<div class="card"><h3>🏟️ Equipo</h3>' + histEq +
+    '<div class="card"><h3>🏟️ Equipo</h3>' +
+    (p.desdeTemporada ? '<div class="datagrid"><div class="dg-item"><div class="k">En el club desde</div><div class="v">' + esc(p.desdeTemporada) + '</div></div></div>' : '') +
+    histEq +
     (otherTeams.length ?
       '<label>Mover a otro equipo</label>' +
       '<div class="med-row" style="margin-top:0">' +
@@ -3227,7 +3232,7 @@ function _slug(s){
   return String(s || '').trim().replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ]+/g, '-').replace(/^-+|-+$/g, '') || 'equipo';
 }
 function aoaJugadores(t){
-  const head = ['Apellido','Nombre','Nacimiento','Categoría','Edad','Posición','Pie','Mano','Ojo',
+  const head = ['Apellido','Nombre','Nacimiento','Categoría','Edad','En el club desde','Posición','Pie','Mano','Ojo',
                 'Peso (kg)','Altura (cm)','Años de fútbol','Otros deportes','Notas'];
   const rows = teamPlayers(t.id)
     .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'))
@@ -3236,7 +3241,7 @@ function aoaJugadores(t){
       const e = edad(p.nacimiento);
       return [
         p.apellido || '', p.nombre, p.nacimiento ? fmtFecha(p.nacimiento) : '', catOf(p) || '',
-        e != null ? e : '', posLabel(p) || '',
+        e != null ? e : '', p.desdeTemporada || '', posLabel(p) || '',
         p.lateralidad.pie || '', p.lateralidad.mano || '', p.lateralidad.ojo || '',
         lp ? lp.kg : '', la ? la.cm : '',
         p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '',
@@ -3435,6 +3440,7 @@ function exportPlayerPdf(){
   _pdfDataGrid([
     ['Nacimiento', p.nacimiento ? fmtFecha(p.nacimiento) : ''],
     ['Posición', posLabel(p) || ''],
+    ['En el club desde', p.desdeTemporada || ''],
     ['Pie hábil', p.lateralidad.pie], ['Mano hábil', p.lateralidad.mano],
     ['Ojo director', p.lateralidad.ojo],
     ['Peso', lp ? lp.kg + ' kg' : ''],

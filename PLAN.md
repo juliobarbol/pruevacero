@@ -90,6 +90,7 @@ attendance = [ {                 // una lista de asistencia por (equipo, categor
 player = {
   id, teamId,                                          // equipo actual
   nombre, apellido, nacimiento (fecha completa),       // año => categoría
+  desdeTemporada?,                                     // temporada de ingreso al club (texto libre: "2024" o "2024/25")
   fotoId?,                                             // foto en IndexedDB
   lateralidad: { pie, mano, ojo },
   fisico: { peso: [{fecha, kg}], altura: [{fecha, cm}] },  // con historial
