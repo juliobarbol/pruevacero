@@ -3301,8 +3301,15 @@ function exportSessionXlsx(){
    ═══════════════════════════════════════════════════════════════════ */
 // Igual que el Excel: jsPDF viene por CDN y necesita internet la PRIMERA
 // vez; después queda cacheado por el SW. Sin emojis en el PDF (helvetica).
+// El informe se arma para "escanear con el ojo": números grandes en tiles,
+// barras por aspecto, tabla de pruebas con tendencia y color en las señales.
 let _pdfDoc = null, _pdfY = 0;
 const PDF_M = 14, PDF_W = 210, PDF_H = 297;
+const PDF_CW = PDF_W - 2 * PDF_M;   // ancho útil
+// paleta (RGB) — coherente con la app en tema claro
+const PC_INK = [15, 23, 42], PC_MUT = [100, 116, 139], PC_ACC = [22, 163, 74];
+const PC_BOR = [226, 232, 240], PC_SOFT = [248, 250, 252], PC_BLUE = [2, 132, 199];
+const PC_RED = [220, 38, 38], PC_AMBER = [217, 119, 6], PC_WHITE = [255, 255, 255];
 
 function _pdfOk(){
   if (!(window.jspdf && window.jspdf.jsPDF)){
@@ -3311,50 +3318,65 @@ function _pdfOk(){
   }
   return true;
 }
+function _pf(c){ _pdfDoc.setFillColor(c[0], c[1], c[2]); }
+function _ps(c){ _pdfDoc.setDrawColor(c[0], c[1], c[2]); }
+function _pt(f, s, c){ _pdfDoc.setFont('helvetica', f); _pdfDoc.setFontSize(s); _pdfDoc.setTextColor(c[0], c[1], c[2]); }
 function _pdfBreak(need){
   if (_pdfY + (need || 6) > PDF_H - 16){ _pdfDoc.addPage(); _pdfY = 18; }
 }
 function _pdfTitle(txt){
   _pdfBreak(16);
-  _pdfY += 4;
-  _pdfDoc.setFont('helvetica', 'bold'); _pdfDoc.setFontSize(12); _pdfDoc.setTextColor(22, 163, 74);
-  _pdfDoc.text(txt, PDF_M, _pdfY);
-  _pdfDoc.setDrawColor(203, 213, 225);
-  _pdfDoc.line(PDF_M, _pdfY + 1.6, PDF_W - PDF_M, _pdfY + 1.6);
-  _pdfY += 7;
+  _pdfY += 5;
+  _pf(PC_ACC);
+  _pdfDoc.rect(PDF_M, _pdfY - 3.3, 1.6, 4.3, 'F');   // barrita de acento
+  _pt('bold', 12.5, PC_INK);
+  _pdfDoc.text(txt, PDF_M + 4, _pdfY);
+  _pdfY += 3.4;
+  _ps(PC_BOR); _pdfDoc.setLineWidth(0.3);
+  _pdfDoc.line(PDF_M, _pdfY, PDF_W - PDF_M, _pdfY);
+  _pdfY += 6;
 }
-function _pdfKV(pairs){
-  for (let i = 0; i < pairs.length; i += 2){
-    _pdfBreak(11);
-    for (let k = 0; k < 2; k++){
-      const pr = pairs[i + k];
-      if (!pr) continue;
-      const x = PDF_M + k * 91;
-      _pdfDoc.setFont('helvetica', 'bold'); _pdfDoc.setFontSize(8.5); _pdfDoc.setTextColor(100, 116, 139);
-      _pdfDoc.text(String(pr[0]).toUpperCase(), x, _pdfY);
-      _pdfDoc.setFont('helvetica', 'normal'); _pdfDoc.setFontSize(10.5); _pdfDoc.setTextColor(15, 23, 42);
-      _pdfDoc.text(String(pr[1] === '' || pr[1] == null ? '—' : pr[1]), x, _pdfY + 4.5);
-    }
-    _pdfY += 11;
-  }
+// Fila de tiles (número grande + etiqueta) — el gran golpe de vista
+function _pdfTiles(items){
+  const n = items.length, gap = 4, h = 18;
+  const w = (PDF_CW - gap * (n - 1)) / n;
+  _pdfBreak(h + 3);
+  const y = _pdfY;
+  items.forEach((it, i) => {
+    const x = PDF_M + i * (w + gap);
+    _pf(PC_SOFT); _ps(PC_BOR); _pdfDoc.setLineWidth(0.3);
+    _pdfDoc.roundedRect(x, y, w, h, 1.8, 1.8, 'FD');
+    _pt('bold', 16.5, it.color || PC_INK);
+    _pdfDoc.text(String(it.num), x + w / 2, y + 9.3, { align:'center' });
+    _pt('bold', 6.8, PC_MUT);
+    _pdfDoc.text(String(it.label).toUpperCase(), x + w / 2, y + 14.3, { align:'center' });
+  });
+  _pdfY = y + h + 4;
 }
-function _pdfCols(cells, bold, muted){
-  // 3 columnas: prueba | última | mejor
-  _pdfBreak(6);
-  _pdfDoc.setFont('helvetica', bold ? 'bold' : 'normal');
-  _pdfDoc.setFontSize(bold ? 8.5 : 10);
-  if (muted) _pdfDoc.setTextColor(100, 116, 139); else _pdfDoc.setTextColor(15, 23, 42);
-  _pdfDoc.text(String(cells[0]), PDF_M, _pdfY);
-  _pdfDoc.text(String(cells[1]), 100, _pdfY);
-  _pdfDoc.text(String(cells[2]), 160, _pdfY);
-  _pdfY += 5.5;
+// Caja de datos clave/valor en dos columnas, sobre fondo suave
+function _pdfDataGrid(pairs){
+  pairs = pairs.filter(Boolean);
+  const rows = Math.ceil(pairs.length / 2), rowH = 10.5, boxH = rows * rowH + 3;
+  _pdfBreak(boxH + 2);
+  const y0 = _pdfY, colW = PDF_CW / 2;
+  _pf(PC_SOFT); _ps(PC_BOR); _pdfDoc.setLineWidth(0.3);
+  _pdfDoc.roundedRect(PDF_M, y0 - 1, PDF_CW, boxH, 2, 2, 'FD');
+  _ps(PC_BOR); _pdfDoc.line(PDF_M + colW, y0 + 1.5, PDF_M + colW, y0 + boxH - 4);
+  pairs.forEach((pr, i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = PDF_M + 4 + col * colW, y = y0 + 3.5 + row * rowH;
+    _pt('bold', 7, PC_MUT); _pdfDoc.text(String(pr[0]).toUpperCase(), x, y);
+    _pt('normal', 10.5, PC_INK);
+    _pdfDoc.text(String(pr[1] === '' || pr[1] == null ? '—' : pr[1]), x, y + 4.7);
+  });
+  _pdfY = y0 + boxH + 4;
 }
-function _pdfPara(txt, size){
-  const lines = _pdfDoc.splitTextToSize(String(txt), PDF_W - 2 * PDF_M);
+function _pdfPara(txt, size, color){
+  const lines = _pdfDoc.splitTextToSize(String(txt), PDF_CW - 6);
   for (let i = 0; i < lines.length; i++){
     _pdfBreak(5);
-    _pdfDoc.setFont('helvetica', 'normal'); _pdfDoc.setFontSize(size || 9.5); _pdfDoc.setTextColor(71, 85, 105);
-    _pdfDoc.text(lines[i], PDF_M, _pdfY);
+    _pt('normal', size || 9.5, color || [71, 85, 105]);
+    _pdfDoc.text(lines[i], PDF_M + 6, _pdfY);
     _pdfY += 4.6;
   }
 }
@@ -3363,81 +3385,141 @@ function _pdfVal(def, v){
   if (def.tipo === 'tiempo') return fmtTiempo(v);
   return v + (def.unidad ? ' ' + def.unidad : '');
 }
+// triángulo de tendencia (arriba = mejoró, verde; abajo = empeoró, rojo)
+function _pdfTri(cx, cy, up, c){
+  _pf(c); const s = 1.4;
+  if (up) _pdfDoc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
+  else _pdfDoc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
+}
 
 function exportPlayerPdf(){
   const p = S.players.find(x => x.id === fichaId);
   if (!p) return;
   if (!_pdfOk()) return;
   const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
-  _pdfDoc = doc; _pdfY = 20;
+  _pdfDoc = doc; _pdfY = 16;
   const t = S.teams.find(x => x.id === p.teamId);
   const e = edad(p.nacimiento);
   const cat = catLabelFor(t, p);
 
-  /* encabezado + foto */
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(15, 23, 42);
+  /* ── encabezado ── */
+  _pt('bold', 8, PC_ACC);
+  doc.text('INFORME DEL JUGADOR', PDF_M, _pdfY);
+  _pdfY += 6.5;
+  _pt('bold', 20, PC_INK);
   doc.text(p.nombre + ' ' + (p.apellido || ''), PDF_M, _pdfY);
-  _pdfY += 7;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(100, 116, 139);
+  _pdfY += 6.5;
+  _pt('normal', 10.5, PC_MUT);
   doc.text([t ? t.nombre : '', cat ? 'Categoría ' + cat : '', e != null ? e + ' años' : '']
-    .filter(Boolean).join('  ·  '), PDF_M, _pdfY);
-  _pdfY += 5;
-  doc.setFontSize(9);
-  doc.text('Informe del jugador · ' + fmtFecha(todayISO()), PDF_M, _pdfY);
+    .filter(Boolean).join('   ·   '), PDF_M, _pdfY);
+  _pdfY += 4.6;
+  _pt('normal', 8.5, PC_MUT);
+  doc.text('Generado el ' + fmtFecha(todayISO()), PDF_M, _pdfY);
   const du = getPhoto(p.fotoId);
   if (du){
     try {
-      doc.addImage(du, /^data:image\/png/i.test(du) ? 'PNG' : 'JPEG', PDF_W - PDF_M - 28, 12, 28, 28);
+      const s = 26, x = PDF_W - PDF_M - s, y = 12;
+      _pf(PC_WHITE); _ps(PC_BOR); _pdfDoc.setLineWidth(0.5);
+      _pdfDoc.roundedRect(x - 1, y - 1, s + 2, s + 2, 2, 2, 'FD');
+      doc.addImage(du, /^data:image\/png/i.test(du) ? 'PNG' : 'JPEG', x, y, s, s);
     } catch(err){}
   }
-  _pdfY = Math.max(_pdfY + 6, du ? 46 : _pdfY + 6);
+  _pdfY = Math.max(_pdfY + 3, 44);
+  _ps(PC_BOR); _pdfDoc.setLineWidth(0.5);
+  _pdfDoc.line(PDF_M, _pdfY, PDF_W - PDF_M, _pdfY);
+  _pdfY += 2;
 
-  /* datos personales */
-  _pdfTitle('Datos');
+  /* ── datos personales ── */
+  _pdfTitle('Datos personales');
   const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
-  _pdfKV([
+  _pdfDataGrid([
     ['Nacimiento', p.nacimiento ? fmtFecha(p.nacimiento) : ''],
     ['Posición', posLabel(p) || ''],
     ['Pie hábil', p.lateralidad.pie], ['Mano hábil', p.lateralidad.mano],
     ['Ojo director', p.lateralidad.ojo],
-    ['Peso', lp ? lp.kg + ' kg (' + fmtFecha(lp.fecha) + ')' : ''],
-    ['Altura', la ? la.cm + ' cm (' + fmtFecha(la.fecha) + ')' : ''],
+    ['Peso', lp ? lp.kg + ' kg' : ''],
+    ['Altura', la ? la.cm + ' cm' : ''],
     ['Años de fútbol', p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : ''],
     ['Otros deportes', p.antecedentes.otrosDeportes || '']
   ]);
 
-  /* pruebas físicas */
-  const defsCon = S.testDefs.filter(d => testHistoryFor(p.id, d.id).length);
-  if (defsCon.length){
-    _pdfTitle('Pruebas físicas');
-    _pdfCols(['PRUEBA', 'ÚLTIMA MARCA', 'MEJOR MARCA'], true, true);
-    defsCon.forEach(d => {
-      const h = testHistoryFor(p.id, d.id);
-      const ult = h[h.length - 1];
-      let mejor = '—';
-      if (d.tipo !== 'texto'){
-        const vals = h.map(x => x.v).filter(v => typeof v === 'number');
-        if (vals.length){
-          mejor = _pdfVal(d, d.mejorEs === 'menor' ? Math.min.apply(null, vals) : Math.max.apply(null, vals));
-        }
-      }
-      _pdfCols([d.nombre, _pdfVal(d, ult.v) + '  (' + fmtFecha(ult.fecha) + ')', mejor]);
-    });
-  }
-
-  /* partidos */
+  /* ── partidos (tiles) ── */
   const agg = aggFor(S.matches, p.id);
   if (agg.pj){
     _pdfTitle('Partidos');
-    _pdfKV([
-      ['Jugados', agg.pj], ['Minutos', agg.min + ' (' + per(agg.min, agg.pj) + ' por partido)'],
-      ['Goles', agg.g + (agg.g ? ' (' + per(agg.g, agg.pj) + ' por partido)' : '')], ['Asistencias', agg.a],
-      ['Amarillas', agg.am], ['Rojas', agg.r],
-      ['Faltas cometidas', agg.fc], ['Faltas recibidas', agg.fr]
+    _pdfTiles([
+      { num: agg.pj, label:'Jugados' },
+      { num: agg.min, label:'Minutos' },
+      { num: agg.g, label:'Goles', color: agg.g ? PC_ACC : PC_INK },
+      { num: agg.a, label:'Asistencias', color: agg.a ? PC_ACC : PC_INK }
     ]);
+    _pdfTiles([
+      { num: agg.am, label:'Amarillas', color: agg.am ? PC_AMBER : PC_INK },
+      { num: agg.r, label:'Rojas', color: agg.r ? PC_RED : PC_INK },
+      { num: agg.fc, label:'Faltas com.' },
+      { num: agg.fr, label:'Faltas rec.' }
+    ]);
+    _pt('normal', 8.5, PC_MUT);
+    _pdfBreak(5);
+    _pdfDoc.text('Promedios: ' + per(agg.min, agg.pj) + ' min · ' + per(agg.g, agg.pj) +
+      ' goles · ' + per(agg.am, agg.pj) + ' amarillas por partido.', PDF_M, _pdfY);
+    _pdfY += 5;
   }
 
-  /* asistencia a clases */
+  /* ── pruebas físicas (tabla con tendencia + récord) ── */
+  const defsCon = S.testDefs.filter(d => testHistoryFor(p.id, d.id).length);
+  if (defsCon.length){
+    _pdfTitle('Pruebas físicas');
+    const cX = PDF_M + 2, cU = 92, cB = 138, cT = 182;   // columnas
+    // cabecera
+    _pdfBreak(8);
+    _pf([241, 245, 249]); _pdfDoc.rect(PDF_M, _pdfY - 4, PDF_CW, 7, 'F');
+    _pt('bold', 7.5, PC_MUT);
+    _pdfDoc.text('PRUEBA', cX, _pdfY);
+    _pdfDoc.text('ÚLTIMA MARCA', cU, _pdfY);
+    _pdfDoc.text('MEJOR MARCA', cB, _pdfY);
+    _pdfY += 5.5;
+    defsCon.forEach((d, ri) => {
+      _pdfBreak(7);
+      const h = testHistoryFor(p.id, d.id);
+      const ult = h[h.length - 1];
+      const vals = h.map(x => x.v).filter(v => typeof v === 'number');
+      let mejorV = null;
+      if (d.tipo !== 'texto' && vals.length){
+        mejorV = d.mejorEs === 'menor' ? Math.min.apply(null, vals) : Math.max.apply(null, vals);
+      }
+      const esRecord = mejorV !== null && typeof ult.v === 'number' && ult.v === mejorV && h.length > 1;
+      // zebra
+      if (ri % 2){ _pf(PC_SOFT); _pdfDoc.rect(PDF_M, _pdfY - 4, PDF_CW, 6.4, 'F'); }
+      _pt('normal', 9.5, PC_INK);
+      _pdfDoc.text(String(d.nombre).slice(0, 34), cX, _pdfY);
+      // última + fecha chica
+      _pt('bold', 9.5, esRecord ? PC_ACC : PC_INK);
+      _pdfDoc.text(_pdfVal(d, ult.v), cU, _pdfY);
+      _pt('normal', 7, PC_MUT);
+      _pdfDoc.text(fmtFecha(ult.fecha), cU + 22, _pdfY);
+      // mejor marca (verde si la última ES la mejor)
+      _pt('bold', 9.5, esRecord ? PC_ACC : PC_INK);
+      _pdfDoc.text(mejorV !== null ? _pdfVal(d, mejorV) : '—', cB, _pdfY);
+      if (esRecord){ _pt('bold', 6.5, PC_ACC); _pdfDoc.text('RÉCORD', cB + 24, _pdfY); }
+      // tendencia vs marca anterior
+      if (d.tipo !== 'texto' && vals.length >= 2){
+        const prev = vals[vals.length - 2], curr = vals[vals.length - 1];
+        if (curr !== prev){
+          const mejor = d.mejorEs === 'menor' ? curr < prev : curr > prev;
+          _pdfTri(cT, _pdfY - 1.4, mejor, mejor ? PC_ACC : PC_RED);
+        } else { _ps(PC_MUT); _pdfDoc.setLineWidth(0.5); _pdfDoc.line(cT - 1.5, _pdfY - 1.4, cT + 1.5, _pdfY - 1.4); }
+      }
+      _pdfY += 6.4;
+    });
+    _pdfY += 1;
+    _pt('normal', 7.5, PC_MUT);
+    _pdfBreak(5);
+    _pdfDoc.text('Verde = la última marca es su mejor marca (récord).  Flecha = mejoró / empeoró respecto de la marca anterior.', PDF_M, _pdfY);
+    _pdfY += 5;
+  }
+
+  /* ── asistencia a clases (tiles, % con color) ── */
   let aP = 0, aA = 0, aL = 0;
   S.attendance.forEach(a => {
     const m = (a.marks || {})[p.id];
@@ -3445,67 +3527,117 @@ function exportPlayerPdf(){
   });
   if (aP + aA + aL){
     _pdfTitle('Asistencia a clases');
-    _pdfKV([
-      ['Presente', aP], ['Ausente', aA],
-      ['Lesionado', aL], ['% de asistencia', (aP + aA) ? Math.round(aP * 100 / (aP + aA)) + '%' : '—']
+    const pct = (aP + aA) ? Math.round(aP * 100 / (aP + aA)) : null;
+    const pctColor = pct == null ? PC_INK : (pct >= 80 ? PC_ACC : (pct >= 60 ? PC_AMBER : PC_RED));
+    _pdfTiles([
+      { num: pct == null ? '—' : pct + '%', label:'Asistencia', color: pctColor },
+      { num: aP, label:'Presente', color: PC_ACC },
+      { num: aA, label:'Ausente', color: aA ? PC_RED : PC_INK },
+      { num: aL, label:'Lesionado', color: aL ? PC_AMBER : PC_INK }
     ]);
+    _pt('normal', 8.5, PC_MUT); _pdfBreak(5);
+    _pdfDoc.text('El % no cuenta los días de lesión. Referencia para decidir titularidad.', PDF_M, _pdfY);
+    _pdfY += 5;
   }
 
-  /* evaluación técnica + radar */
+  /* ── evaluación técnica: barras por aspecto + radar ── */
   const ev = lastEval(p.id);
   if (ev){
-    _pdfTitle('Evaluación técnica (1 a 10) · ' + fmtFecha(ev.fecha));
+    _pdfTitle('Evaluación técnica  ·  ' + fmtFecha(ev.fecha));
+    const avg = catAvgScores(p);
+    // tile con el promedio general
+    _pdfTiles([{ num: evalAvg(ev), label:'Promedio general (1 a 10)', color: PC_ACC }]);
+    // barras por aspecto
     const asp = activeAspects().filter(a => typeof (ev.scores || {})[a.id] === 'number');
-    _pdfKV(asp.map(a => [a.nombre, ev.scores[a.id] + ' / 10']));
-    _pdfKV([['Promedio general', evalAvg(ev) + ' / 10']]);
+    const barX = PDF_M + 44, barW = PDF_CW - 44 - 12;
+    asp.forEach(a => {
+      _pdfBreak(7);
+      const v = ev.scores[a.id] || 0;
+      _pt('normal', 9, PC_INK);
+      _pdfDoc.text(String(a.nombre).slice(0, 22), PDF_M, _pdfY + 2.3);
+      _pf(PC_BOR); _pdfDoc.roundedRect(barX, _pdfY, barW, 3, 1.5, 1.5, 'F');
+      _pf(PC_ACC); _pdfDoc.roundedRect(barX, _pdfY, Math.max(0.1, barW * v / 10), 3, 1.5, 1.5, 'F');
+      if (avg && typeof avg[a.id] === 'number'){   // marca del promedio de la categoría
+        const mx = barX + barW * Math.max(0, Math.min(10, avg[a.id])) / 10;
+        _ps(PC_BLUE); _pdfDoc.setLineWidth(0.7); _pdfDoc.line(mx, _pdfY - 0.8, mx, _pdfY + 3.8);
+      }
+      _pt('bold', 9.5, PC_INK);
+      _pdfDoc.text(String(v), PDF_W - PDF_M, _pdfY + 2.4, { align:'right' });
+      _pdfY += 6.4;
+    });
+    _pdfY += 1;
+    _pt('normal', 7.5, PC_MUT); _pdfBreak(5);
+    _pdfDoc.text('Barra verde = puntaje del jugador' + (avg ? '.  Línea azul = promedio de su categoría.' : '.'), PDF_M, _pdfY);
+    _pdfY += 6;
+    // radar
     try {
       const cv = document.createElement('canvas');
       const root = document.documentElement;
       const prevTheme = root.getAttribute('data-theme');
-      root.setAttribute('data-theme', 'light');   // radar con colores de fondo claro
+      root.setAttribute('data-theme', 'light');
       const aspAll = activeAspects();
       const series = [];
-      const avg = catAvgScores(p);
       if (avg) series.push({ vals: aspAll.map(a => avg[a.id] || 0), color:'#0284c7', fillAlpha:0.10 });
       series.push({ vals: aspAll.map(a => (ev.scores || {})[a.id] || 0), color:'#16a34a', fillAlpha:0.22 });
       drawRadar(cv, aspAll.map(a => a.nombre), series);
       root.setAttribute('data-theme', prevTheme);
       const img = cv.toDataURL('image/png');
-      const iw = 96, ih = Math.round(iw * (cv.height / cv.width));
-      _pdfBreak(ih + 8);
+      const iw = 88, ih = Math.round(iw * (cv.height / cv.width));
+      _pdfBreak(ih + 4);
       doc.addImage(img, 'PNG', (PDF_W - iw) / 2, _pdfY, iw, ih);
-      _pdfY += ih + 3;
-      _pdfPara('Verde: ' + p.nombre + (avg ? ' · Azul: promedio de su categoría' : ''), 8.5);
+      _pdfY += ih + 4;
     } catch(err){}
   }
 
-  /* lesiones */
+  /* ── lesiones (bullet rojo) ── */
   if ((p.lesiones || []).length){
     _pdfTitle('Lesiones');
     p.lesiones.slice().reverse().forEach(l => {
-      _pdfPara(fmtFecha(l.fecha) + ' · ' + l.tipo +
-        (l.diasBaja ? ' · ' + l.diasBaja + ' día' + (l.diasBaja == 1 ? '' : 's') + ' de baja' : '') +
-        (l.notas ? ' — ' + l.notas : ''), 10);
+      _pdfBreak(6);
+      _pf(PC_RED); _pdfDoc.circle(PDF_M + 1.4, _pdfY - 1.1, 1.1, 'F');
+      _pt('bold', 9.5, PC_INK);
+      _pdfDoc.text(fmtFecha(l.fecha) + '  ·  ' + String(l.tipo), PDF_M + 5, _pdfY);
+      if (l.diasBaja){ _pt('bold', 8.5, PC_AMBER); _pdfDoc.text(l.diasBaja + ' día' + (l.diasBaja == 1 ? '' : 's') + ' de baja', PDF_W - PDF_M, _pdfY, { align:'right' }); }
+      _pdfY += 5;
+      if (l.notas) _pdfPara(l.notas, 9, PC_MUT);
     });
+    _pdfY += 1;
   }
 
-  /* objetivos */
+  /* ── objetivos (marca verde cumplido / ámbar pendiente) ── */
   if ((p.objetivos || []).length){
     _pdfTitle('Objetivos');
     p.objetivos.forEach(o => {
-      _pdfPara((o.cumplido ? '[X] ' : '[  ] ') + o.texto +
-        (o.cumplido ? ' (cumplido el ' + fmtFecha(o.cumplido) + ')' : ''), 10);
+      _pdfBreak(6);
+      const c = o.cumplido ? PC_ACC : PC_AMBER;
+      _pf(c); _pdfDoc.roundedRect(PDF_M, _pdfY - 3, 3, 3, 0.6, 0.6, 'F');
+      _pt('normal', 10, PC_INK);
+      const lines = _pdfDoc.splitTextToSize(String(o.texto), PDF_CW - 40);
+      _pdfDoc.text(lines[0], PDF_M + 5, _pdfY);
+      _pt('bold', 7.5, c);
+      _pdfDoc.text(o.cumplido ? 'CUMPLIDO ' + fmtFecha(o.cumplido) : 'PENDIENTE', PDF_W - PDF_M, _pdfY, { align:'right' });
+      _pdfY += 5;
+      for (let i = 1; i < lines.length; i++){ _pdfBreak(5); _pt('normal', 10, PC_INK); _pdfDoc.text(lines[i], PDF_M + 5, _pdfY); _pdfY += 4.6; }
     });
+    _pdfY += 1;
   }
 
-  /* notas */
+  /* ── notas ── */
   if (p.notas){
     _pdfTitle('Notas');
-    _pdfPara(p.notas, 10);
+    _pdfPara(p.notas, 10, PC_INK);
   }
 
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
-  doc.text('Generado con PruevaCero · ' + fmtFecha(todayISO()), PDF_M, PDF_H - 8);
+  /* ── pie de página en todas las hojas ── */
+  const np = doc.getNumberOfPages();
+  for (let i = 1; i <= np; i++){
+    doc.setPage(i);
+    _ps(PC_BOR); _pdfDoc.setLineWidth(0.3);
+    doc.line(PDF_M, PDF_H - 12, PDF_W - PDF_M, PDF_H - 12);
+    _pt('normal', 7.5, PC_MUT);
+    doc.text('Generado con PruevaCero · ' + fmtFecha(todayISO()), PDF_M, PDF_H - 8);
+    doc.text('Página ' + i + ' de ' + np, PDF_W - PDF_M, PDF_H - 8, { align:'right' });
+  }
 
   const fn = ('informe-' + p.nombre + '-' + (p.apellido || '') + '-' + todayISO())
     .replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ-]+/g, '-') + '.pdf';
