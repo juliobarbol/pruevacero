@@ -38,6 +38,16 @@ automáticos.
   e informe PDF del jugador.
 - El "elo test" de los audios se interpreta como **test Yo-Yo** (resistencia
   intermitente). Confirmar con el cuerpo técnico.
+- **Cronómetro grupal con pestaña propia (2026-07-07)**: pestaña ⏱ Crono.
+  Selección de participantes por categoría/año o manual, cronómetros
+  individuales por jugador, largada grupal 3·2·1 (beep+vibración), play/stop
+  independiente, vueltas sin frenar el reloj, meta de vueltas (al marcar la
+  última el cronómetro se para solo), orden de llegada en vivo, comparación
+  instantánea vs historial (récord 🏆 / ▲▼), deshacer último toque y pantalla
+  siempre encendida (Wake Lock). Al guardar, los tiempos van SOLOS a la
+  jornada de pruebas de HOY (se crea si no existe) → ficha, evolución, stats
+  y Excel sin carga manual. La tanda en marcha sobrevive cierres/recargas
+  (se persiste en `pc_ui` y el tiempo se calcula contra la hora real).
 
 ## Cómo se construye (misma receta que las otras apps de Julio)
 
@@ -107,7 +117,8 @@ testDef = {                    // CREADOR DE PRUEBAS (definición reutilizable)
 testSession = {                // una "jornada de pruebas" de un equipo
   id, teamId, fecha,
   pruebas: [testDefId, ...],   // qué se midió ese día
-  resultados: { [playerId]: { [testDefId]: valor } }
+  resultados: { [playerId]: { [testDefId]: valor } },
+  vueltas?: { [playerId]: { [testDefId]: [seg, ...] } }  // parciales del ⏱ Crono
 }
 
 match = {                      // shape REAL implementado en Etapa 3
@@ -148,13 +159,16 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
   2. **💪 Pruebas** — jornadas de prueba + **creador de pruebas** (gestor de
      `testDef`). Planilla rápida de carga por jugador. En la ficha se ve la
      evolución de cada prueba (mejor marca, última, gráfico simple).
-  3. **⚽ Partidos** — planilla de partido: titulares, cambios (minuto,
+  3. **⏱ Crono** — cronómetro grupal: participantes por categoría o manual,
+     largada 3·2·1, vueltas, meta de vueltas, orden de llegada; guarda solo
+     en la jornada de pruebas de hoy.
+  4. **⚽ Partidos** — planilla de partido: titulares, cambios (minuto,
      entra/sale — los minutos salen solos), goles, asistencias,
      amarillas/rojas, faltas cometidas y recibidas.
-  4. **📊 Estadísticas** — por jugador y por equipo: partidos y minutos,
+  5. **📊 Estadísticas** — por jugador y por equipo: partidos y minutos,
      goles/asistencias (total y por partido), tarjetas y faltas por partido
      (ej. "una amarilla cada 3 partidos"), tabla comparativa ordenable.
-  5. **⚙️ Config** — equipos, backup JSON, exportes, tema.
+  6. **⚙️ Config** — equipos, backup JSON, exportes, tema.
 
 ## Etapas de implementación
 
@@ -169,6 +183,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 6 | **Categorías dentro del equipo** (rango de años, partidos por categoría, filtro en Jugadores) + **escudo del club** + **foto por jugador** (IndexedDB `pruevacero_photos`, viajan en backup y ficha exportada) | HECHA (2026-07-06) |
 | 7 | **Asistencia a entrenamientos** (pestaña 🗓️ Clases: por equipo+categoría, días/horas de clase editables en la categoría, lista de HOY accesible, edición retroactiva, % de asistencia y resumen en la ficha) | HECHA (2026-07-06) |
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría (aspectos configurables, en la ficha) | HECHA (2026-07-06) |
+| ⏱ | **Cronómetro grupal** (pestaña ⏱ Crono, pedido 2026-07-07): participantes por categoría/manual, largada 3·2·1 con beep/vibración, play/stop individual, vueltas + meta de vueltas, orden de llegada, comparación vs historial, deshacer, Wake Lock; guarda solo en la jornada de HOY (campo `vueltas` en testSession) | HECHA (2026-07-07) |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
 | 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
 

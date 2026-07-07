@@ -259,6 +259,21 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
 .res-row .nm{flex:1;min-width:0;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .res-row input{width:120px;flex:none;text-align:center}
 
+/* ============================ CRONÓMETRO ============================ */
+.cr-clock{font-size:36px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;margin:8px 0 2px}
+.cr-row{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px}
+.cr-row.running{border-color:var(--accent)}
+.cr-info{flex:1;min-width:0}
+.cr-name{font-weight:700;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr-sub{font-size:11.5px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr-time{font-variant-numeric:tabular-nums;font-weight:800;font-size:16.5px;flex:none;min-width:72px;text-align:right}
+.cr-btn{flex:none;width:50px;height:46px;border-radius:11px;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;background:var(--surface2)}
+.cr-btn.go{background:var(--accent);color:#fff;font-size:17px}
+.cr-btn.stop{background:rgba(239,68,68,.15);color:var(--danger);font-size:17px}
+.cr-btn.lap{background:var(--accent-dim);color:var(--accent);width:64px}
+.cr-pos{flex:none;min-width:30px;height:30px;border-radius:9px;background:var(--accent-dim);color:var(--accent);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.cr-count{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:800;color:#fff}
+
 @media(min-width:700px){
   main,.overlay{max-width:640px;margin:0 auto}
   header{padding-left:calc(50% - 306px);padding-right:calc(50% - 306px)}
@@ -285,6 +300,11 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   <!-- ══════════════ PESTAÑA PRUEBAS ══════════════ -->
   <section class="tab" id="tab-pruebas">
     <div id="pruebasContent"></div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA CRONÓMETRO ══════════════ -->
+  <section class="tab" id="tab-crono">
+    <div id="cronoContent"></div>
   </section>
 
   <!-- ══════════════ PESTAÑA PARTIDOS ══════════════ -->
@@ -353,6 +373,7 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
 <nav>
   <button class="active" id="nav-jugadores" onclick="switchTab('jugadores')"><span class="ic">👤</span>Jugadores</button>
   <button id="nav-pruebas" onclick="switchTab('pruebas')"><span class="ic">💪</span>Pruebas</button>
+  <button id="nav-crono" onclick="switchTab('crono')"><span class="ic">⏱️</span>Crono</button>
   <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
   <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Clases</button>
   <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
@@ -893,6 +914,7 @@ function switchTab(t){
   if (nb) nb.classList.add('active');
   document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
   if (t === 'pruebas') renderPruebas();
+  if (t === 'crono') renderCrono();
   if (t === 'partidos') renderPartidos();
   if (t === 'stats') renderStats();
   if (t === 'clases') renderClases();
@@ -950,12 +972,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -981,7 +1003,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1558,7 +1580,12 @@ function renderSession(){
         const attrs = def.tipo === 'numero'
           ? 'type="number" inputmode="decimal" step="0.01"'
           : 'type="text"' + (def.tipo === 'tiempo' ? ' inputmode="numeric" placeholder="4:35"' : '');
-        return '<div class="res-row"><div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' +
+        const laps = ((s.vueltas || {})[p.id] || {})[def.id];
+        const lapTxt = (laps && laps.length)
+          ? '<div style="font-size:11.5px;color:var(--muted);margin-top:1px">🏁 ' +
+            laps.map(x => def.tipo === 'tiempo' ? fmtTiempo(x) : x).join(' · ') + '</div>'
+          : '';
+        return '<div class="res-row"><div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + lapTxt + '</div>' +
           '<input ' + attrs + ' value="' + esc(shown) + '" onchange="resIn(\'' + p.id + '\', this.value)"></div>';
       }).join('');
       planilla += '<div class="btn-row"><button class="btn sec" onclick="sessionRemoveTest()">Quitar esta prueba de la jornada</button></div>';
@@ -1770,6 +1797,483 @@ function renderEvolution(p){
   });
   return html ? '<div class="card"><h3>💪 Pruebas físicas</h3>' + html +
     '<p class="hint" style="margin-top:10px">▲ mejoró · ▼ empeoró · 🏆 mejor marca</p></div>' : '';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/crono.js ===== Cronómetro grupal (pestaña ⏱ Crono)
+   ═══════════════════════════════════════════════════════════════════ */
+// La tanda en marcha vive en UI.crono (pc_ui) y el tiempo se calcula SIEMPRE
+// contra la hora real (Date.now - startAt): si la app se cierra o recarga,
+// los cronómetros siguen corriendo bien. Al guardar, los tiempos van a la
+// jornada de pruebas de HOY (se crea sola) => stats/evolución/Excel gratis.
+let _crTick = null;        // interval que refresca los números en pantalla
+let _crWakeLock = null;    // pantalla encendida mientras corre
+let _crAudio = null;       // beeps con WebAudio
+let _crCount = 0;          // cuenta regresiva en curso (3..1)
+let crDefId = null;        // prueba elegida en la pantalla de armado
+let crSel = [];            // jugadores elegidos en la pantalla de armado
+let crMeta = '';           // meta de vueltas (texto del input)
+
+function cronoState(){
+  const c = UI.crono;
+  return (c && c.fase === 'run' && c.runners) ? c : null;
+}
+function cronoDefs(){
+  return S.testDefs.filter(d => !d.archivada &&
+    (d.tipo === 'tiempo' || (d.tipo === 'numero' && /seg/i.test(d.unidad || ''))));
+}
+function fmtCrono(ms){
+  const t = Math.max(0, Math.floor(ms / 100));   // décimas
+  const d = t % 10, s = Math.floor(t / 10) % 60, m = Math.floor(t / 600);
+  return m + ':' + String(s).padStart(2, '0') + '.' + d;
+}
+function crRound(def, secs){
+  return def.tipo === 'tiempo' ? Math.round(secs * 10) / 10 : Math.round(secs * 100) / 100;
+}
+function crPlayerOf(pid){
+  return S.players.find(x => x.id === pid) || { id:pid, nombre:'Jugador', apellido:'' };
+}
+
+/* --- pantalla de armado (elegir prueba, meta y jugadores) --- */
+function renderCrono(){
+  const box = document.getElementById('cronoContent');
+  if (!box) return;
+  if (cronoState()){ renderCronoRun(); return; }
+  crEnsureTick();
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">⏱️</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    return;
+  }
+  const players = teamPlayers(t.id)
+    .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  if (!players.length){
+    box.innerHTML = '<div class="empty"><div class="big">⏱️</div>No hay jugadores en <b>' + esc(t.nombre) + '</b>.<br>Cargalos en la pestaña Jugadores.</div>';
+    return;
+  }
+  const defs = cronoDefs();
+  if (!crDefId || !defs.some(d => d.id === crDefId)) crDefId = defs.length ? defs[0].id : null;
+  crSel = crSel.filter(id => players.some(p => p.id === id));
+
+  const defChips = defs.map(d =>
+    '<button class="chip' + (d.id === crDefId ? ' on' : '') + '" onclick="crPickDef(\'' + d.id + '\')">' + esc(d.nombre) + '</button>'
+  ).join('') || '<span class="hint">No hay pruebas de tiempo: creá una en Pruebas → 🛠 Mis pruebas (tipo "tiempo" o en segundos).</span>';
+
+  // Chips de selección rápida: todos / ninguno / categorías / años sueltos
+  const cats = teamCats(t);
+  const yearsMap = {};
+  players.forEach(p => { if (!playerCat(t, p) && catOf(p)) yearsMap[catOf(p)] = 1; });
+  let quick = '<button class="chip" onclick="crQuickSel(\'all\')">Todos</button>' +
+              '<button class="chip" onclick="crQuickSel(\'none\')">Ninguno</button>' +
+    cats.map(c => '<button class="chip" onclick="crQuickSel(\'c:' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
+    Object.keys(yearsMap).sort().map(y => '<button class="chip" onclick="crQuickSel(\'y:' + esc(y) + '\')">' + esc(y) + '</button>').join('');
+
+  const cards = players.map(p => {
+    const on = crSel.includes(p.id);
+    return '<button class="player-card" onclick="crTogglePlayer(\'' + p.id + '\')">' +
+      avatarHtml(p) +
+      '<div class="pc-info"><div class="pc-name">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' +
+      '<div class="pc-sub">' + esc(catLabelFor(t, p) || '—') + '</div></div>' +
+      '<span class="tit-chip' + (on ? ' on' : '') + '">' + (on ? '✓' : '—') + '</span></button>';
+  }).join('');
+
+  box.innerHTML =
+    '<div class="card"><h3>⏱ Cronómetro grupal</h3>' +
+    '<p class="hint">Elegí la prueba y quiénes corren. Largás a todos juntos (o de a uno), ' +
+    'marcás vueltas sin frenar el reloj y parás a cada uno cuando llega. Al guardar, los ' +
+    'tiempos van SOLOS a la jornada de pruebas de hoy (ficha, evolución y stats).</p>' +
+    '<label>Prueba a cronometrar</label><div class="chips">' + defChips + '</div>' +
+    '<label>Meta de vueltas (opcional)</label>' +
+    '<input type="number" min="1" inputmode="numeric" placeholder="Sin meta (parar con ⏹)" value="' + esc(crMeta) + '" oninput="crMetaIn(this.value)">' +
+    '<p class="hint" style="margin-top:6px">Con meta, al marcar la última vuelta el cronómetro de ese jugador se para solo.</p></div>' +
+    '<label>¿Quiénes corren? · selección rápida</label><div class="chips">' + quick + '</div>' +
+    cards +
+    '<button class="btn" style="margin-top:6px" onclick="cronoBegin()">⏱ Empezar (' + crSel.length + ' jugador' + (crSel.length === 1 ? '' : 'es') + ')</button>';
+}
+function crPickDef(id){ crDefId = id; renderCrono(); }
+function crMetaIn(v){ crMeta = v; }
+function crTogglePlayer(pid){
+  const i = crSel.indexOf(pid);
+  if (i >= 0) crSel.splice(i, 1); else crSel.push(pid);
+  renderCrono();
+}
+function crQuickSel(kind){
+  const t = activeTeam();
+  if (!t) return;
+  const players = teamPlayers(t.id);
+  if (kind === 'all') crSel = players.map(p => p.id);
+  else if (kind === 'none') crSel = [];
+  else if (kind.slice(0, 2) === 'c:'){
+    const cid = kind.slice(2);
+    crSel = players.filter(p => { const c = playerCat(t, p); return c && c.id === cid; }).map(p => p.id);
+  } else if (kind.slice(0, 2) === 'y:'){
+    const y = kind.slice(2);
+    crSel = players.filter(p => !playerCat(t, p) && catOf(p) === y).map(p => p.id);
+  }
+  renderCrono();
+}
+function cronoBegin(){
+  const t = activeTeam();
+  if (!t) return;
+  const def = crDefId ? testDefById(crDefId) : null;
+  if (!def){ toast('Elegí qué prueba vas a cronometrar', true); return; }
+  if (!crSel.length){ toast('Elegí al menos un jugador', true); return; }
+  const meta = Math.max(0, Math.floor(Number(crMeta) || 0));
+  const runners = {};
+  crSel.forEach(pid => runners[pid] = { startAt:null, stopAt:null, laps:[], pos:null });
+  UI.crono = { fase:'run', teamId:t.id, defId:def.id, meta:meta || null, order:crSel.slice(), runners, nextPos:1, undo:[] };
+  saveUI();
+  renderCronoRun();
+}
+
+/* --- pantalla de la tanda en marcha --- */
+function renderCronoRun(){
+  const box = document.getElementById('cronoContent');
+  if (!box) return;
+  const st = cronoState();
+  if (!st){ renderCrono(); return; }
+  const def = testDefById(st.defId) || { nombre:'Prueba', tipo:'tiempo', mejorEs:'menor', unidad:'' };
+  const team = S.teams.find(x => x.id === st.teamId);
+  const now = Date.now();
+
+  const pids = st.order.slice();
+  pids.sort((a, b) => {
+    const ra = st.runners[a], rb = st.runners[b];
+    const ka = ra.stopAt ? 0 : (ra.startAt ? 1 : 2);
+    const kb = rb.stopAt ? 0 : (rb.startAt ? 1 : 2);
+    if (ka !== kb) return ka - kb;
+    if (ka === 0) return ra.pos - rb.pos;
+    return st.order.indexOf(a) - st.order.indexOf(b);
+  });
+
+  let minStart = null, maxStop = 0, anyRun = false, anyIdle = false;
+  pids.forEach(pid => {
+    const r = st.runners[pid];
+    if (!r.startAt){ anyIdle = true; return; }
+    if (minStart === null || r.startAt < minStart) minStart = r.startAt;
+    if (r.stopAt) maxStop = Math.max(maxStop, r.stopAt); else anyRun = true;
+  });
+  const globalTxt = minStart === null ? '0:00.0' : fmtCrono((anyRun ? now : maxStop) - minStart);
+
+  let html =
+    '<div class="card" style="text-align:center">' +
+    '<div class="hint">' + esc(def.nombre) + (team ? ' · ' + esc(team.nombre) : '') +
+      (st.meta ? ' · meta: ' + st.meta + ' vuelta' + (st.meta === 1 ? '' : 's') : '') + '</div>' +
+    '<div class="cr-clock" id="crGlobal">' + globalTxt + '</div>' +
+    (anyIdle ? '<button class="btn" onclick="cronoCountdown()">🚦 Largar todos (3·2·1)</button>' : '') +
+    '</div>' +
+    pids.map(pid => crRowHtml(st, crPlayerOf(pid), st.runners[pid], def, now)).join('') +
+    '<div class="btn-row">' +
+      (st.undo.length ? '<button class="btn sec" onclick="cronoUndo()">↩ Deshacer</button>' : '') +
+      '<button class="btn sec" onclick="cronoCancel()">✖ Descartar</button>' +
+    '</div>' +
+    '<button class="btn" style="margin-top:9px" onclick="cronoGuardar()">💾 Guardar en la jornada de hoy</button>' +
+    '<p class="hint" style="margin-top:8px">🏁 marca vuelta sin frenar · ⏹ para y anota el orden de llegada. ' +
+    'Los tiempos guardados aparecen en Pruebas, en la ficha de cada jugador y en sus estadísticas.</p>';
+  box.innerHTML = html;
+  crEnsureTick();
+}
+function crRowHtml(st, p, r, def, now){
+  const running = !!(r.startAt && !r.stopAt);
+  const done = !!r.stopAt;
+  let badge = '';
+  if (done) badge = '<div class="cr-pos">' + r.pos + 'º</div>';
+  else if (running && r.laps.length) badge = '<div class="cr-pos">V' + r.laps.length + '</div>';
+
+  let subs = '';
+  if (running){
+    if (r.laps.length){
+      const lastSeg = r.laps[r.laps.length - 1] - (r.laps.length > 1 ? r.laps[r.laps.length - 2] : 0);
+      subs = '<div class="cr-sub">vuelta ' + r.laps.length + (st.meta ? ' de ' + st.meta : '') + ' · última ' + fmtCrono(lastSeg) + '</div>';
+    } else {
+      subs = '<div class="cr-sub">' + (st.meta ? 'meta: ' + st.meta + ' vuelta' + (st.meta === 1 ? '' : 's') : 'corriendo…') + '</div>';
+    }
+  } else if (done){
+    subs = '<div class="cr-sub">' + crCompareTxt(p.id, def, (r.stopAt - r.startAt) / 1000) + '</div>' + crLapsResumen(def, r);
+  } else {
+    subs = '<div class="cr-sub">sin largar</div>';
+  }
+
+  let btns = '';
+  if (!r.startAt) btns = '<button class="cr-btn go" onclick="cronoPlay(\'' + p.id + '\')">▶</button>';
+  else if (running) btns =
+    '<button class="cr-btn lap" onclick="cronoLap(\'' + p.id + '\')">🏁 Vuelta</button>' +
+    '<button class="cr-btn stop" onclick="cronoStop(\'' + p.id + '\')">⏹</button>';
+
+  const timeTxt = r.startAt ? fmtCrono((r.stopAt || now) - r.startAt) : '0:00.0';
+  return '<div class="cr-row' + (running ? ' running' : '') + '">' + badge +
+    '<div class="cr-info"><div class="cr-name">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' + subs + '</div>' +
+    '<div class="cr-time" id="crt_' + p.id + '">' + timeTxt + '</div>' + btns + '</div>';
+}
+function crLapsResumen(def, r){
+  if (!r.laps.length) return '';
+  const segs = r.laps.map((ms, i) => ms - (i ? r.laps[i - 1] : 0));
+  const best = Math.min.apply(null, segs);
+  const avg = segs.reduce((a, b) => a + b, 0) / segs.length;
+  return '<div class="cr-sub">🏁 ' + r.laps.length + ' vuelta' + (r.laps.length === 1 ? '' : 's') +
+    ' · mejor ' + fmtCrono(best) + ' · prom ' + fmtCrono(avg) + '</div>';
+}
+// Comparación contra el historial de jornadas (récord personal / mejoró / empeoró)
+function crCompareTxt(pid, def, secs){
+  const h = testHistoryFor(pid, def.id);
+  const v = crRound(def, secs);
+  if (!h.length) return 'primera marca en esta prueba';
+  const vals = h.map(x => x.v).filter(x => typeof x === 'number');
+  if (!vals.length) return '';
+  const menor = def.mejorEs === 'menor';
+  const best = menor ? Math.min.apply(null, vals) : Math.max.apply(null, vals);
+  const last = vals[vals.length - 1];
+  if (menor ? v < best : v > best) return '🏆 récord personal (antes ' + fmtTestVal(def, best) + ')';
+  if (v === last) return '= igual que la última (' + fmtTestVal(def, last) + ')';
+  const better = menor ? v < last : v > last;
+  const diff = Math.round(Math.abs(v - last) * 100) / 100;
+  const dTxt = def.tipo === 'tiempo' ? fmtTiempo(diff) : diff + (def.unidad ? ' ' + esc(def.unidad) : '');
+  return (better ? '▲ mejoró ' : '▼ empeoró ') + dTxt + ' vs última (' + fmtTestVal(def, last) + ')';
+}
+
+/* --- acciones sobre cada cronómetro --- */
+function crRunner(pid){
+  const st = cronoState();
+  return st ? st.runners[pid] : null;
+}
+function crPushUndo(u){
+  const st = cronoState();
+  if (!st) return;
+  st.undo.push(u);
+  if (st.undo.length > 30) st.undo.shift();
+}
+function cronoPlay(pid){
+  const r = crRunner(pid);
+  if (!r || r.startAt) return;
+  crAudioInit();
+  r.startAt = Date.now();
+  crPushUndo({ type:'play', pid });
+  saveUI(); crBeep(880, .12); crVib(60);
+  renderCronoRun();
+}
+function cronoLap(pid){
+  const st = cronoState(), r = crRunner(pid);
+  if (!st || !r || !r.startAt || r.stopAt) return;
+  crAudioInit();
+  const el = Date.now() - r.startAt;
+  r.laps.push(el);
+  if (st.meta && r.laps.length >= st.meta){
+    // llegó a la meta de vueltas: se para solo
+    r.stopAt = r.startAt + el;
+    r.pos = st.nextPos++;
+    crPushUndo({ type:'lapstop', pid });
+    crBeep(660, .3); crVib([80, 60, 80]);
+  } else {
+    crPushUndo({ type:'lap', pid });
+    crBeep(660, .1); crVib(40);
+  }
+  saveUI();
+  renderCronoRun();
+}
+function cronoStop(pid){
+  const st = cronoState(), r = crRunner(pid);
+  if (!st || !r || !r.startAt || r.stopAt) return;
+  crAudioInit();
+  r.stopAt = Date.now();
+  r.pos = st.nextPos++;
+  crPushUndo({ type:'stop', pid });
+  saveUI(); crBeep(520, .18); crVib(120);
+  renderCronoRun();
+}
+function cronoUndo(){
+  const st = cronoState();
+  if (!st || !st.undo.length) return;
+  const u = st.undo.pop();
+  if (u.type === 'playAll'){
+    (u.pids || []).forEach(pid => { const r = st.runners[pid]; if (r) r.startAt = null; });
+  } else {
+    const r = st.runners[u.pid];
+    if (r){
+      if (u.type === 'play') r.startAt = null;
+      else if (u.type === 'lap') r.laps.pop();
+      else if (u.type === 'stop'){ r.stopAt = null; r.pos = null; st.nextPos--; }
+      else if (u.type === 'lapstop'){ r.laps.pop(); r.stopAt = null; r.pos = null; st.nextPos--; }
+    }
+  }
+  saveUI();
+  toast('↩ Deshecho');
+  renderCronoRun();
+}
+
+/* --- largada grupal con cuenta regresiva 3·2·1 --- */
+function cronoCountdown(){
+  const st = cronoState();
+  if (!st || _crCount) return;
+  if (!Object.keys(st.runners).some(pid => !st.runners[pid].startAt)) return;
+  crAudioInit();   // gesto del usuario: habilita audio y vibración
+  _crCount = 3;
+  const tick = () => {
+    if (!cronoState()){ _crCount = 0; crCountHide(); return; }
+    if (_crCount > 0){
+      crCountShow(_crCount);
+      crBeep(440, .15); crVib(80);
+      _crCount--;
+      setTimeout(tick, 1000);
+    } else {
+      crCountHide();
+      crBeep(880, .4); crVib([120, 80, 120]);
+      _cronoStartAll();
+    }
+  };
+  tick();
+}
+function crCountShow(n){
+  let el = document.getElementById('crCount');
+  if (!el){
+    el = document.createElement('div');
+    el.id = 'crCount';
+    el.className = 'cr-count';
+    document.body.appendChild(el);
+  }
+  el.textContent = n;
+}
+function crCountHide(){
+  const el = document.getElementById('crCount');
+  if (el) el.remove();
+}
+function _cronoStartAll(){
+  const st = cronoState();
+  if (!st) return;
+  const now = Date.now();
+  const pids = Object.keys(st.runners).filter(pid => !st.runners[pid].startAt);
+  pids.forEach(pid => st.runners[pid].startAt = now);
+  if (pids.length) crPushUndo({ type:'playAll', pids });
+  saveUI();
+  renderCronoRun();
+}
+
+/* --- guardar / descartar la tanda --- */
+async function cronoGuardar(){
+  const st = cronoState();
+  if (!st) return;
+  const def = testDefById(st.defId);
+  if (!def){ toast('La prueba de esta tanda ya no existe', true); return; }
+  const pids = Object.keys(st.runners);
+  const running = pids.filter(pid => st.runners[pid].startAt && !st.runners[pid].stopAt);
+  if (!pids.some(pid => st.runners[pid].startAt)){ toast('Nadie largó todavía', true); return; }
+  if (running.length){
+    const ok = await appConfirm('Cronómetros en marcha',
+      running.length + ' jugador' + (running.length === 1 ? ' sigue' : 'es siguen') +
+      ' corriendo: se guardan con el tiempo de AHORA. ¿Guardar igual?',
+      { okLabel:'Guardar' });
+    if (!ok) return;
+    const now = Date.now();
+    running.forEach(pid => { const r = st.runners[pid]; r.stopAt = now; r.pos = st.nextPos++; });
+  }
+  // Jornada de pruebas de HOY del equipo de la tanda (se crea si no existe)
+  const fecha = todayISO();
+  let s = S.testSessions.find(x => x.teamId === st.teamId && x.fecha === fecha);
+  if (!s){
+    s = { id:uid(), teamId:st.teamId, fecha, pruebas:[], resultados:{} };
+    S.testSessions.push(s);
+  }
+  s.pruebas = s.pruebas || [];
+  if (!s.pruebas.includes(def.id)) s.pruebas.push(def.id);
+  let n = 0;
+  pids.forEach(pid => {
+    const r = st.runners[pid];
+    if (!r.startAt || !r.stopAt) return;   // sin largar: no se guarda
+    s.resultados[pid] = s.resultados[pid] || {};
+    s.resultados[pid][def.id] = crRound(def, (r.stopAt - r.startAt) / 1000);
+    if (r.laps.length){
+      // parciales de cada vuelta en segundos
+      s.vueltas = s.vueltas || {};
+      s.vueltas[pid] = s.vueltas[pid] || {};
+      s.vueltas[pid][def.id] = r.laps.map((ms, i) => crRound(def, (ms - (i ? r.laps[i - 1] : 0)) / 1000));
+    }
+    n++;
+  });
+  saveData();
+  UI.crono = null;
+  saveUI();
+  crEnsureTick();
+  toast('⏱ ' + n + ' tiempo' + (n === 1 ? '' : 's') + ' guardado' + (n === 1 ? '' : 's') + ' en la jornada de hoy');
+  renderCrono();
+  renderPruebas();
+}
+async function cronoCancel(){
+  const st = cronoState();
+  if (!st) return;
+  if (Object.keys(st.runners).some(pid => st.runners[pid].startAt)){
+    const ok = await appConfirm('Descartar tanda',
+      'Se pierden los tiempos de esta tanda (no se guarda nada). ¿Descartar?',
+      { okLabel:'Descartar', danger:true });
+    if (!ok) return;
+  }
+  UI.crono = null;
+  saveUI();
+  crEnsureTick();
+  renderCrono();
+}
+
+/* --- refresco visual, pantalla encendida, beeps y vibración --- */
+function crEnsureTick(){
+  const st = cronoState();
+  const anyRun = !!(st && Object.keys(st.runners).some(pid => st.runners[pid].startAt && !st.runners[pid].stopAt));
+  if (anyRun && !_crTick){ _crTick = setInterval(crTickPaint, 100); crWake(); }
+  if (!anyRun && _crTick){ clearInterval(_crTick); _crTick = null; }
+  if (!anyRun) crWakeRelease();
+}
+function crTickPaint(){
+  const st = cronoState();
+  if (!st){ crEnsureTick(); return; }
+  const now = Date.now();
+  let minStart = null, anyRun = false;
+  Object.keys(st.runners).forEach(pid => {
+    const r = st.runners[pid];
+    if (!r.startAt) return;
+    if (minStart === null || r.startAt < minStart) minStart = r.startAt;
+    if (!r.stopAt){
+      anyRun = true;
+      const el = document.getElementById('crt_' + pid);
+      if (el) el.textContent = fmtCrono(now - r.startAt);
+    }
+  });
+  const g = document.getElementById('crGlobal');
+  if (g && minStart !== null && anyRun) g.textContent = fmtCrono(now - minStart);
+  if (!anyRun) crEnsureTick();
+}
+async function crWake(){
+  try {
+    if (_crWakeLock || !navigator.wakeLock) return;
+    _crWakeLock = await navigator.wakeLock.request('screen');
+    _crWakeLock.addEventListener('release', () => { _crWakeLock = null; });
+  } catch(e){}
+}
+function crWakeRelease(){
+  try { if (_crWakeLock) _crWakeLock.release(); } catch(e){}
+  _crWakeLock = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  crEnsureTick();   // re-pide el wake lock y re-arma el refresco al volver
+  if (cronoState() && UI.tab === 'crono') renderCronoRun();
+});
+function crAudioInit(){
+  try {
+    if (!_crAudio) _crAudio = new (window.AudioContext || window.webkitAudioContext)();
+    if (_crAudio.state === 'suspended') _crAudio.resume();
+  } catch(e){}
+}
+function crBeep(freq, dur){
+  try {
+    if (!_crAudio) return;
+    const o = _crAudio.createOscillator(), g = _crAudio.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(.3, _crAudio.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, _crAudio.currentTime + dur);
+    o.connect(g); g.connect(_crAudio.destination);
+    o.start(); o.stop(_crAudio.currentTime + dur);
+  } catch(e){}
+}
+function crVib(p){
+  try { if (navigator.vibrate) navigator.vibrate(p); } catch(e){}
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -2785,8 +3289,9 @@ function importBackupFile(ev){
       S.evaluations = S.evaluations || [];
       S.evalAspects = S.evalAspects || DEF_ASPECTS.slice();
       UI.teamId = S.teams.length ? S.teams[0].id : null;
+      UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers(); renderPruebas(); renderPartidos(); renderStats(); renderClases();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
@@ -2807,6 +3312,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTeamBar();
   renderPlayers();
   switchTab(UI.tab && document.getElementById('tab-' + UI.tab) ? UI.tab : 'jugadores');
+
+  // Tanda de cronómetro que quedó corriendo (el tiempo sigue por hora real)
+  if (cronoState() && UI.tab !== 'crono') toast('⏱ Hay una tanda de cronómetro en marcha');
 
   // Fotos: cuando la caché de IndexedDB está lista, re-render con imágenes
   hydratePhotoCache().then(() => {

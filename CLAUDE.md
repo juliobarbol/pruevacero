@@ -10,8 +10,9 @@
 App PWA para que un profesor/entrenador de fútbol formativo que da clases en
 varios equipos lleve el seguimiento de sus jugadores: equipos (con escudo y
 categorías por rango de años), fichas con biometría y foto, pruebas físicas
-con creador flexible, partidos (minutos automáticos por cambios), asistencia
-a clases, estadísticas y evaluación técnica 1–10 con radar.
+con creador flexible, cronómetro grupal con vueltas (pestaña ⏱ Crono, guarda
+directo en la jornada de pruebas), partidos (minutos automáticos por cambios),
+asistencia a clases, estadísticas y evaluación técnica 1–10 con radar.
 
 - **Producción**: https://pruevacero.juliobarribolbo.workers.dev
 - Worker de Cloudflare `pruevacero`, conectado al repo GitHub
@@ -58,6 +59,7 @@ grep -n "===== js/" index.html
 | `js/cats.js` | categorías por rango de años (`playerCat`, `catLabelFor`) + días/hora de clase |
 | `js/players.js` | lista con filtros, ficha (`openFicha` arma TODAS las tarjetas), form, mover/exportar/importar jugador |
 | `js/tests.js` | creador de pruebas + jornadas + evolución (`renderEvolution`) |
+| `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
 | `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
