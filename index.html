@@ -9,6 +9,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <script>
 // Tema antes del primer pintado (evita flash)
 (function(){
@@ -435,6 +436,22 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
     <button class="icon-btn" onclick="fichaEdit()" title="Editar">✏️</button>
   </div>
   <div id="fichaBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY LESIÓN ══════════════ -->
+<div class="overlay" id="ovLesion">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovLesion')">←</button>
+    <h2>Registrar lesión</h2>
+  </div>
+  <label style="margin-top:0">Fecha</label><input id="lfFecha" type="date">
+  <label>Tipo de lesión *</label><input id="lfTipo" autocomplete="off" placeholder="Ej: esguince de tobillo derecho">
+  <label>Días de baja (estimados o reales)</label><input id="lfDias" type="number" min="0" inputmode="numeric" placeholder="Ej: 14">
+  <label>Notas</label><textarea id="lfNotas" rows="3" placeholder="Cómo pasó, tratamiento, kinesiólogo…"></textarea>
+  <div class="btn-row">
+    <button class="btn sec" onclick="closeOverlay('ovLesion')">Cancelar</button>
+    <button class="btn" onclick="lesionSave()">Guardar</button>
+  </div>
 </div>
 
 <!-- ══════════════ OVERLAY JORNADA DE PRUEBAS ══════════════ -->
@@ -1328,6 +1345,10 @@ function openFicha(id){
 
     renderEvolution(p) +
 
+    renderLesionesCard(p) +
+
+    renderObjetivosCard(p) +
+
     (p.notas ? '<div class="card"><h3>📝 Notas</h3><p class="hint" style="white-space:pre-wrap">' + esc(p.notas) + '</p></div>' : '') +
 
     '<div class="card"><h3>🏟️ Equipo</h3>' + histEq +
@@ -1339,7 +1360,8 @@ function openFicha(id){
       '</div>' : '<p class="hint" style="margin-top:8px">Creá otro equipo para poder moverlo.</p>') +
     '</div>' +
 
-    '<div class="btn-row"><button class="btn sec" onclick="exportPlayer()">📤 Exportar ficha</button></div>' +
+    '<div class="btn-row"><button class="btn sec" onclick="exportPlayerPdf()">📄 Informe PDF</button>' +
+    '<button class="btn sec" onclick="exportPlayer()">📤 Exportar ficha</button></div>' +
     '<div class="btn-row"><button class="btn danger" onclick="deletePlayerAsk()">🗑 Eliminar jugador</button></div>';
 
   openOverlay('ovFicha');
@@ -3054,6 +3076,124 @@ async function aspectDelete(id){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/goals.js ===== Lesiones y objetivos por jugador (Etapa 9)
+   ═══════════════════════════════════════════════════════════════════ */
+// Los campos p.lesiones y p.objetivos existen desde la Etapa 1 (vacíos);
+// acá va la UI en la ficha. Siempre acceder con (p.lesiones || []) por los
+// jugadores importados de instalaciones viejas.
+
+/* --- lesiones --- */
+function renderLesionesCard(p){
+  const les = (p.lesiones || []).slice().reverse();   // más reciente arriba
+  let html = '<div class="card"><h3>🩹 Lesiones</h3>';
+  if (!les.length){
+    html += '<p class="hint">Sin lesiones registradas. Si se lastima, anotala acá: fecha, tipo y días de baja.</p>';
+  } else {
+    const totDias = les.reduce((s, l) => s + (Number(l.diasBaja) || 0), 0);
+    html += les.map((l, i) => {
+      const idx = p.lesiones.length - 1 - i;   // índice real en el array
+      return '<div class="histline"><span>' + fmtFecha(l.fecha) + ' · <b style="color:var(--text)">' + esc(l.tipo) + '</b>' +
+        (l.notas ? '<br><span style="font-size:11.5px">' + esc(l.notas) + '</span>' : '') + '</span>' +
+        '<b>' + (l.diasBaja ? l.diasBaja + ' día' + (l.diasBaja == 1 ? '' : 's') : '—') +
+        ' <a href="javascript:lesionDelete(' + idx + ')" style="color:var(--danger);text-decoration:none">✕</a></b></div>';
+    }).join('');
+    html += '<p class="hint" style="margin-top:8px">' + les.length + ' lesión' + (les.length === 1 ? '' : 'es') +
+      (totDias ? ' · ' + totDias + ' días de baja en total' : '') + '</p>';
+  }
+  html += '<div class="btn-row"><button class="btn sec" onclick="lesionOpen()">➕ Registrar lesión</button></div></div>';
+  return html;
+}
+function lesionOpen(){
+  if (!fichaId) return;
+  document.getElementById('lfFecha').value = todayISO();
+  document.getElementById('lfTipo').value = '';
+  document.getElementById('lfDias').value = '';
+  document.getElementById('lfNotas').value = '';
+  openOverlay('ovLesion');
+}
+function lesionSave(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  const tipo = document.getElementById('lfTipo').value.trim();
+  if (!tipo){ toast('Falta el tipo de lesión', true); return; }
+  const dias = Math.round(Number(document.getElementById('lfDias').value));
+  p.lesiones = p.lesiones || [];
+  p.lesiones.push({
+    fecha: document.getElementById('lfFecha').value || todayISO(),
+    tipo: tipo,
+    diasBaja: (!isNaN(dias) && dias > 0) ? dias : null,
+    notas: document.getElementById('lfNotas').value.trim()
+  });
+  p.lesiones.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  saveData();
+  closeOverlay('ovLesion');
+  openFicha(p.id);
+  toast('Lesión registrada');
+}
+async function lesionDelete(idx){
+  const p = S.players.find(x => x.id === fichaId);
+  const l = p && (p.lesiones || [])[idx];
+  if (!l) return;
+  const ok = await appConfirm('Borrar lesión',
+    '¿Borrar "' + l.tipo + '" del ' + fmtFecha(l.fecha) + '?', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  p.lesiones.splice(idx, 1);
+  saveData();
+  openFicha(p.id);
+}
+
+/* --- objetivos --- */
+function renderObjetivosCard(p){
+  const objs = p.objetivos || [];
+  let html = '<div class="card"><h3>🥅 Objetivos</h3>';
+  if (!objs.length){
+    html += '<p class="hint">Metas de trabajo del jugador (ej: "mejorar la pierna izquierda"). Tocá el círculo cuando la cumpla.</p>';
+  } else {
+    html += objs.map((o, i) =>
+      '<div class="histline"><span' + (o.cumplido ? ' style="text-decoration:line-through"' : '') + '>' + esc(o.texto) +
+      '<br><span style="font-size:11px;text-decoration:none">' + fmtFecha(o.creado) +
+      (o.cumplido ? ' · cumplido el ' + fmtFecha(o.cumplido) : '') + '</span></span>' +
+      '<b><a href="javascript:objetivoToggle(' + i + ')" style="text-decoration:none" title="Marcar cumplido">' + (o.cumplido ? '✅' : '⭕') + '</a> ' +
+      '<a href="javascript:objetivoDelete(' + i + ')" style="color:var(--danger);text-decoration:none">✕</a></b></div>'
+    ).join('');
+    const pend = objs.filter(o => !o.cumplido).length;
+    html += '<p class="hint" style="margin-top:8px">' + (pend ? pend + ' pendiente' + (pend === 1 ? '' : 's') : '¡Todos cumplidos! 🎉') + '</p>';
+  }
+  html += '<div class="btn-row"><button class="btn sec" onclick="objetivoAdd()">➕ Nuevo objetivo</button></div></div>';
+  return html;
+}
+async function objetivoAdd(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  const txt = await appPromptText('Nuevo objetivo', 'Meta de trabajo para ' + p.nombre + ':', '', 'Ej: mejorar la pierna izquierda');
+  if (!txt) return;
+  p.objetivos = p.objetivos || [];
+  p.objetivos.push({ texto: txt, creado: todayISO(), cumplido: null });
+  saveData();
+  openFicha(p.id);
+  toast('Objetivo agregado');
+}
+function objetivoToggle(i){
+  const p = S.players.find(x => x.id === fichaId);
+  const o = p && (p.objetivos || [])[i];
+  if (!o) return;
+  o.cumplido = o.cumplido ? null : todayISO();
+  saveData();
+  openFicha(p.id);
+  if (o.cumplido) toast('🥅 ¡Objetivo cumplido!');
+}
+async function objetivoDelete(i){
+  const p = S.players.find(x => x.id === fichaId);
+  const o = p && (p.objetivos || [])[i];
+  if (!o) return;
+  const ok = await appConfirm('Borrar objetivo', '¿Borrar "' + o.texto + '"?', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  p.objetivos.splice(i, 1);
+  saveData();
+  openFicha(p.id);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -3154,6 +3294,224 @@ function exportSessionXlsx(){
   const t = S.teams.find(x => x.id === s.teamId);
   _saveXlsx(aoaSession(s), 'Pruebas', 'pruebas-' + s.fecha + '-' + _slug(t ? t.nombre : '') + '.xlsx');
   toast('Excel de la jornada descargado');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/pdf.js ===== Informe PDF del jugador (jsPDF, Etapa 10)
+   ═══════════════════════════════════════════════════════════════════ */
+// Igual que el Excel: jsPDF viene por CDN y necesita internet la PRIMERA
+// vez; después queda cacheado por el SW. Sin emojis en el PDF (helvetica).
+let _pdfDoc = null, _pdfY = 0;
+const PDF_M = 14, PDF_W = 210, PDF_H = 297;
+
+function _pdfOk(){
+  if (!(window.jspdf && window.jspdf.jsPDF)){
+    toast('La librería de PDF no cargó todavía: probá con internet y reintentá', true);
+    return false;
+  }
+  return true;
+}
+function _pdfBreak(need){
+  if (_pdfY + (need || 6) > PDF_H - 16){ _pdfDoc.addPage(); _pdfY = 18; }
+}
+function _pdfTitle(txt){
+  _pdfBreak(16);
+  _pdfY += 4;
+  _pdfDoc.setFont('helvetica', 'bold'); _pdfDoc.setFontSize(12); _pdfDoc.setTextColor(22, 163, 74);
+  _pdfDoc.text(txt, PDF_M, _pdfY);
+  _pdfDoc.setDrawColor(203, 213, 225);
+  _pdfDoc.line(PDF_M, _pdfY + 1.6, PDF_W - PDF_M, _pdfY + 1.6);
+  _pdfY += 7;
+}
+function _pdfKV(pairs){
+  for (let i = 0; i < pairs.length; i += 2){
+    _pdfBreak(11);
+    for (let k = 0; k < 2; k++){
+      const pr = pairs[i + k];
+      if (!pr) continue;
+      const x = PDF_M + k * 91;
+      _pdfDoc.setFont('helvetica', 'bold'); _pdfDoc.setFontSize(8.5); _pdfDoc.setTextColor(100, 116, 139);
+      _pdfDoc.text(String(pr[0]).toUpperCase(), x, _pdfY);
+      _pdfDoc.setFont('helvetica', 'normal'); _pdfDoc.setFontSize(10.5); _pdfDoc.setTextColor(15, 23, 42);
+      _pdfDoc.text(String(pr[1] === '' || pr[1] == null ? '—' : pr[1]), x, _pdfY + 4.5);
+    }
+    _pdfY += 11;
+  }
+}
+function _pdfCols(cells, bold, muted){
+  // 3 columnas: prueba | última | mejor
+  _pdfBreak(6);
+  _pdfDoc.setFont('helvetica', bold ? 'bold' : 'normal');
+  _pdfDoc.setFontSize(bold ? 8.5 : 10);
+  if (muted) _pdfDoc.setTextColor(100, 116, 139); else _pdfDoc.setTextColor(15, 23, 42);
+  _pdfDoc.text(String(cells[0]), PDF_M, _pdfY);
+  _pdfDoc.text(String(cells[1]), 100, _pdfY);
+  _pdfDoc.text(String(cells[2]), 160, _pdfY);
+  _pdfY += 5.5;
+}
+function _pdfPara(txt, size){
+  const lines = _pdfDoc.splitTextToSize(String(txt), PDF_W - 2 * PDF_M);
+  for (let i = 0; i < lines.length; i++){
+    _pdfBreak(5);
+    _pdfDoc.setFont('helvetica', 'normal'); _pdfDoc.setFontSize(size || 9.5); _pdfDoc.setTextColor(71, 85, 105);
+    _pdfDoc.text(lines[i], PDF_M, _pdfY);
+    _pdfY += 4.6;
+  }
+}
+function _pdfVal(def, v){
+  if (v === undefined || v === null || v === '') return '—';
+  if (def.tipo === 'tiempo') return fmtTiempo(v);
+  return v + (def.unidad ? ' ' + def.unidad : '');
+}
+
+function exportPlayerPdf(){
+  const p = S.players.find(x => x.id === fichaId);
+  if (!p) return;
+  if (!_pdfOk()) return;
+  const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
+  _pdfDoc = doc; _pdfY = 20;
+  const t = S.teams.find(x => x.id === p.teamId);
+  const e = edad(p.nacimiento);
+  const cat = catLabelFor(t, p);
+
+  /* encabezado + foto */
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(15, 23, 42);
+  doc.text(p.nombre + ' ' + (p.apellido || ''), PDF_M, _pdfY);
+  _pdfY += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5); doc.setTextColor(100, 116, 139);
+  doc.text([t ? t.nombre : '', cat ? 'Categoría ' + cat : '', e != null ? e + ' años' : '']
+    .filter(Boolean).join('  ·  '), PDF_M, _pdfY);
+  _pdfY += 5;
+  doc.setFontSize(9);
+  doc.text('Informe del jugador · ' + fmtFecha(todayISO()), PDF_M, _pdfY);
+  const du = getPhoto(p.fotoId);
+  if (du){
+    try {
+      doc.addImage(du, /^data:image\/png/i.test(du) ? 'PNG' : 'JPEG', PDF_W - PDF_M - 28, 12, 28, 28);
+    } catch(err){}
+  }
+  _pdfY = Math.max(_pdfY + 6, du ? 46 : _pdfY + 6);
+
+  /* datos personales */
+  _pdfTitle('Datos');
+  const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
+  _pdfKV([
+    ['Nacimiento', p.nacimiento ? fmtFecha(p.nacimiento) : ''],
+    ['Posición', posLabel(p) || ''],
+    ['Pie hábil', p.lateralidad.pie], ['Mano hábil', p.lateralidad.mano],
+    ['Ojo director', p.lateralidad.ojo],
+    ['Peso', lp ? lp.kg + ' kg (' + fmtFecha(lp.fecha) + ')' : ''],
+    ['Altura', la ? la.cm + ' cm (' + fmtFecha(la.fecha) + ')' : ''],
+    ['Años de fútbol', p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : ''],
+    ['Otros deportes', p.antecedentes.otrosDeportes || '']
+  ]);
+
+  /* pruebas físicas */
+  const defsCon = S.testDefs.filter(d => testHistoryFor(p.id, d.id).length);
+  if (defsCon.length){
+    _pdfTitle('Pruebas físicas');
+    _pdfCols(['PRUEBA', 'ÚLTIMA MARCA', 'MEJOR MARCA'], true, true);
+    defsCon.forEach(d => {
+      const h = testHistoryFor(p.id, d.id);
+      const ult = h[h.length - 1];
+      let mejor = '—';
+      if (d.tipo !== 'texto'){
+        const vals = h.map(x => x.v).filter(v => typeof v === 'number');
+        if (vals.length){
+          mejor = _pdfVal(d, d.mejorEs === 'menor' ? Math.min.apply(null, vals) : Math.max.apply(null, vals));
+        }
+      }
+      _pdfCols([d.nombre, _pdfVal(d, ult.v) + '  (' + fmtFecha(ult.fecha) + ')', mejor]);
+    });
+  }
+
+  /* partidos */
+  const agg = aggFor(S.matches, p.id);
+  if (agg.pj){
+    _pdfTitle('Partidos');
+    _pdfKV([
+      ['Jugados', agg.pj], ['Minutos', agg.min + ' (' + per(agg.min, agg.pj) + ' por partido)'],
+      ['Goles', agg.g + (agg.g ? ' (' + per(agg.g, agg.pj) + ' por partido)' : '')], ['Asistencias', agg.a],
+      ['Amarillas', agg.am], ['Rojas', agg.r],
+      ['Faltas cometidas', agg.fc], ['Faltas recibidas', agg.fr]
+    ]);
+  }
+
+  /* asistencia a clases */
+  let aP = 0, aA = 0, aL = 0;
+  S.attendance.forEach(a => {
+    const m = (a.marks || {})[p.id];
+    if (m === 'P') aP++; else if (m === 'A') aA++; else if (m === 'L') aL++;
+  });
+  if (aP + aA + aL){
+    _pdfTitle('Asistencia a clases');
+    _pdfKV([
+      ['Presente', aP], ['Ausente', aA],
+      ['Lesionado', aL], ['% de asistencia', (aP + aA) ? Math.round(aP * 100 / (aP + aA)) + '%' : '—']
+    ]);
+  }
+
+  /* evaluación técnica + radar */
+  const ev = lastEval(p.id);
+  if (ev){
+    _pdfTitle('Evaluación técnica (1 a 10) · ' + fmtFecha(ev.fecha));
+    const asp = activeAspects().filter(a => typeof (ev.scores || {})[a.id] === 'number');
+    _pdfKV(asp.map(a => [a.nombre, ev.scores[a.id] + ' / 10']));
+    _pdfKV([['Promedio general', evalAvg(ev) + ' / 10']]);
+    try {
+      const cv = document.createElement('canvas');
+      const root = document.documentElement;
+      const prevTheme = root.getAttribute('data-theme');
+      root.setAttribute('data-theme', 'light');   // radar con colores de fondo claro
+      const aspAll = activeAspects();
+      const series = [];
+      const avg = catAvgScores(p);
+      if (avg) series.push({ vals: aspAll.map(a => avg[a.id] || 0), color:'#0284c7', fillAlpha:0.10 });
+      series.push({ vals: aspAll.map(a => (ev.scores || {})[a.id] || 0), color:'#16a34a', fillAlpha:0.22 });
+      drawRadar(cv, aspAll.map(a => a.nombre), series);
+      root.setAttribute('data-theme', prevTheme);
+      const img = cv.toDataURL('image/png');
+      const iw = 96, ih = Math.round(iw * (cv.height / cv.width));
+      _pdfBreak(ih + 8);
+      doc.addImage(img, 'PNG', (PDF_W - iw) / 2, _pdfY, iw, ih);
+      _pdfY += ih + 3;
+      _pdfPara('Verde: ' + p.nombre + (avg ? ' · Azul: promedio de su categoría' : ''), 8.5);
+    } catch(err){}
+  }
+
+  /* lesiones */
+  if ((p.lesiones || []).length){
+    _pdfTitle('Lesiones');
+    p.lesiones.slice().reverse().forEach(l => {
+      _pdfPara(fmtFecha(l.fecha) + ' · ' + l.tipo +
+        (l.diasBaja ? ' · ' + l.diasBaja + ' día' + (l.diasBaja == 1 ? '' : 's') + ' de baja' : '') +
+        (l.notas ? ' — ' + l.notas : ''), 10);
+    });
+  }
+
+  /* objetivos */
+  if ((p.objetivos || []).length){
+    _pdfTitle('Objetivos');
+    p.objetivos.forEach(o => {
+      _pdfPara((o.cumplido ? '[X] ' : '[  ] ') + o.texto +
+        (o.cumplido ? ' (cumplido el ' + fmtFecha(o.cumplido) + ')' : ''), 10);
+    });
+  }
+
+  /* notas */
+  if (p.notas){
+    _pdfTitle('Notas');
+    _pdfPara(p.notas, 10);
+  }
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(148, 163, 184);
+  doc.text('Generado con PruevaCero · ' + fmtFecha(todayISO()), PDF_M, PDF_H - 8);
+
+  const fn = ('informe-' + p.nombre + '-' + (p.apellido || '') + '-' + todayISO())
+    .replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ-]+/g, '-') + '.pdf';
+  doc.save(fn);
+  _pdfDoc = null;
+  toast('Informe PDF descargado');
 }
 
 /* ═══════════════════════════════════════════════════════════════════

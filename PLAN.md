@@ -184,8 +184,8 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 7 | **Asistencia a entrenamientos** (pestaña 🗓️ Clases: por equipo+categoría, días/horas de clase editables en la categoría, lista de HOY accesible, edición retroactiva, % de asistencia y resumen en la ficha) | HECHA (2026-07-06) |
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría (aspectos configurables, en la ficha) | HECHA (2026-07-06) |
 | ⏱ | **Cronómetro grupal** (pestaña ⏱ Crono, pedido 2026-07-07): participantes por categoría/manual, largada 3·2·1 con beep/vibración, play/stop individual, vueltas + meta de vueltas, orden de llegada, comparación vs historial, deshacer, Wake Lock; guarda solo en la jornada de HOY (campo `vueltas` en testSession) | HECHA (2026-07-07) |
-| 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
-| 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
+| 9 | Historial de lesiones + objetivos por jugador (en la ficha: alta/borrar lesiones con fecha/tipo/días/notas; objetivos con cumplido/pendiente) | HECHA (2026-07-07) |
+| 10 | Informe PDF del jugador (ficha + foto + pruebas + radar + estadísticas + asistencia + lesiones + objetivos, jsPDF por CDN) | HECHA (2026-07-07) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
@@ -217,3 +217,19 @@ Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
   - Aunque no se haya pasado lista ese día, se puede **cargar o editar una
     fecha pasada** (por si no se usó la app en el momento).
   - El % de asistencia se usa como referencia para decidir titularidad.
+
+### Etapas 9 y 10 (implementadas 2026-07-07)
+
+- **Lesiones y objetivos (Etapa 9)**: en la ficha, dos tarjetas nuevas.
+  Lesiones (`p.lesiones`): alta con fecha/tipo/días de baja/notas, se ordenan
+  por fecha, muestran total de días de baja; borrar con confirmación.
+  Objetivos (`p.objetivos`): alta con el prompt propio, tocar ⭕/✅ marca
+  cumplido (guarda la fecha), borrar con confirmación. Ambos campos ya
+  existían vacíos en el shape del jugador desde la Etapa 1.
+- **Informe PDF (Etapa 10)**: botón "📄 Informe PDF" en la ficha (junto a
+  Exportar ficha). Usa **jsPDF 2.5.1 por CDN** (cdnjs, con SRI), misma
+  estrategia que el Excel: necesita internet la PRIMERA vez y después queda
+  cacheado por el SW. Arma un A4 con datos personales, foto, pruebas físicas
+  (última + mejor marca), partidos, asistencia, evaluación técnica con el
+  radar (se rasteriza el canvas en tema claro y se inserta como PNG),
+  lesiones, objetivos y notas. Sin emojis dentro del PDF (helvetica).
