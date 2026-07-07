@@ -34,7 +34,9 @@ asistencia a clases, estadísticas y evaluación técnica 1–10 con radar.
   **Fotos y escudos en IndexedDB** (`pruevacero_photos`), en el estado solo
   viaja el id (`fotoId`/`escudoId`); caché síncrona `_photoCache` +
   `hydratePhotoCache()` al arrancar. El backup JSON adjunta las fotos.
-- Única dependencia CDN: SheetJS (xlsx 0.18.5, cdnjs) para exportes Excel.
+- Dependencias CDN (cdnjs, con SRI): SheetJS (xlsx 0.18.5) para Excel y
+  jsPDF (2.5.1) para el informe PDF del jugador. Ambas necesitan internet la
+  PRIMERA vez; después el SW las cachea.
 
 ## Trabajar sin quemar tokens
 
@@ -58,6 +60,8 @@ grep -n "===== js/" index.html
 | `js/teams.js` | equipos: alta/renombrar/borrar, selector, escudo |
 | `js/cats.js` | categorías por rango de años (`playerCat`, `catLabelFor`) + días/hora de clase |
 | `js/players.js` | lista con filtros, ficha (`openFicha` arma TODAS las tarjetas), form, mover/exportar/importar jugador |
+| `js/goals.js` | lesiones (`p.lesiones`) y objetivos (`p.objetivos`) en la ficha: `renderLesionesCard`/`renderObjetivosCard`, alta/borrar/cumplir |
+| `js/pdf.js` | informe PDF del jugador (`exportPlayerPdf`, jsPDF): datos, foto, pruebas, partidos, asistencia, radar rasterizado, lesiones, objetivos |
 | `js/tests.js` | creador de pruebas + jornadas + evolución (`renderEvolution`) |
 | `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
@@ -126,21 +130,15 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 
 ## PENDIENTE (próximas sesiones)
 
-Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-06 falta:
+Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-07 **todas las
+etapas del plan (0–10) + el cronómetro grupal están HECHAS.** Quedan solo
+ideas menores / oportunidades (ninguna pedida por Julio todavía):
 
-1. **Etapa 9 — Lesiones y objetivos por jugador**: historial de lesiones
-   (fecha, tipo, días de baja, notas) y objetivos ("mejorar pierna
-   izquierda") con cumplido/pendiente. Los campos `lesiones` y `objetivos`
-   YA existen vacíos en el shape del jugador; falta la UI en la ficha.
-2. **Etapa 10 — Informe PDF del jugador**: ficha + foto + pruebas + radar +
-   estadísticas + asistencia, con jsPDF (misma librería CDN que usan
-   StockMerger/Presupuestos AR) para mostrar a padres/club.
-3. Menores / oportunidades anotadas:
-   - Los exportes Excel necesitan internet la PRIMERA vez (CDN); después
-     queda cacheado por el SW.
-   - En GitHub la rama por defecto del repo sigue siendo la de trabajo
-     `claude/pruebacero-player-analysis-7hu1mm` (la producción en Cloudflare
-     ya apunta a `main`, eso está bien). Si algún día se cambia la rama por
-     defecto a `main` en GitHub, mejor.
-   - Ideas no pedidas aún: filtro por categoría en Pruebas/Stats, radar en
-     el Excel/PDF, recordatorio de backup.
+- Los exportes Excel/PDF necesitan internet la PRIMERA vez (CDN); después
+  quedan cacheados por el SW.
+- En GitHub la rama por defecto del repo sigue siendo la de trabajo
+  `claude/pruebacero-player-analysis-7hu1mm` (la producción en Cloudflare
+  ya apunta a `main`, eso está bien). Si algún día se cambia la rama por
+  defecto a `main` en GitHub, mejor.
+- Ideas no pedidas aún: filtro por categoría en Pruebas/Stats, radar en el
+  Excel, recordatorio de backup, informe PDF a nivel equipo/categoría.
