@@ -233,3 +233,14 @@ Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
   (última + mejor marca), partidos, asistencia, evaluación técnica con el
   radar (se rasteriza el canvas en tema claro y se inserta como PNG),
   lesiones, objetivos y notas. Sin emojis dentro del PDF (helvetica).
+- **Rediseño del PDF para lectura rápida (2026-07-07, pedido de Julio)**: el
+  informe se rearmó para "escanear con el ojo". Partidos y asistencia van en
+  *tiles* (número grande + etiqueta); el % de asistencia se colorea por umbral
+  (verde ≥80, ámbar ≥60, rojo <60). Pruebas físicas en tabla con filas
+  alternadas, la mejor marca en verde con etiqueta RÉCORD cuando la última es
+  la mejor, y flecha de tendencia (▲ verde mejoró / ▼ rojo empeoró) vs la marca
+  anterior. Evaluación con barra por aspecto (puntaje verde + línea azul del
+  promedio de la categoría) además del radar. Lesiones con viñeta roja y días
+  de baja en ámbar; objetivos con cuadrito verde (cumplido) / ámbar
+  (pendiente). Pie con numeración de página. Helpers `_pdfTiles`,
+  `_pdfDataGrid`, `_pdfTri` en `js/pdf.js`.
