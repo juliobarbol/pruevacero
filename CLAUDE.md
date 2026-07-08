@@ -131,8 +131,22 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 
 ## PENDIENTE (próximas sesiones)
 
-Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-07 **todas las
-etapas del plan (0–10) + el cronómetro grupal están HECHAS.** Quedan solo
+**Pedido por Julio el 2026-07-08 (ANOTADO para hacer en otra sesión, con
+diagnóstico ya hecho — ver "PENDIENTES — próxima sesión" en `PLAN.md`):**
+1. Mover el botón ⚙️ Config al header (donde está 🌙) y dejar el toggle de tema
+   solo dentro de la pestaña Config (ojo: `applyTheme` toca `#themeBtn`, guardar
+   contra null si se elimina).
+2. **Bug del lápiz ✏️ de editar**: `ovPlayerForm` está en el DOM antes que
+   `ovFicha` con igual `z-index:30`, y `openPlayerForm` no cierra la ficha → el
+   form queda tapado; al volver atrás aparece. Arreglo: que `openOverlay` suba
+   el overlay abierto (o subir z-index / reordenar `ovPlayerForm`).
+3. **Instalable**: manifest + íconos + SW ya OK (Chrome/Android instala desde el
+   menú). Falta botón "Instalar" con `beforeinstallprompt` y metas iOS
+   (`apple-mobile-web-app-capable` + ayuda "Agregar a inicio").
+
+Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-08 **todas las
+etapas del plan (0–10) + el cronómetro grupal + los grupos de rendimiento
+están HECHAS.** Quedan las 3 tareas de arriba (pedidas por Julio) y estas
 ideas menores / oportunidades (ninguna pedida por Julio todavía):
 
 - Los exportes Excel/PDF necesitan internet la PRIMERA vez (CDN); después

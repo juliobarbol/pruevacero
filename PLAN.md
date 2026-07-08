@@ -279,3 +279,78 @@ config (`S.grupos` global + `testDef.grupos` por prueba).
 Ideas para 2ª tanda (no implementadas aún): percentil dentro de la categoría,
 elegir 2–4 grupos, grupos en el PDF, cruces con lesiones/asistencia, objetivo
 automático para el grupo más flojo.
+
+## PENDIENTES — próxima sesión (anotado 2026-07-08, pedido de Julio)
+
+> Julio pidió estas 3 cosas y aclaró que quedaran ANOTADAS para hacerlas en
+> otra sesión (no se implementaron todavía). Diagnóstico ya hecho abajo para
+> arrancar directo.
+
+### 1. Reordenar botón de Config y tema (UI del header)
+Qué quiere Julio:
+- El **botón de Configuración (⚙️) va ARRIBA, en el header**, en el lugar donde
+  hoy está el botón de tema (🌙/☀️).
+- El **botón de tema claro/oscuro va DENTRO de la pestaña Config** (ya existe
+  ahí la tarjeta "🎨 Apariencia" con `toggleTheme()`, así que el toggle del
+  header pasa a ser redundante y se saca).
+
+Estado actual (para implementar):
+- Header (HTML ~línea 270): `brand ⚽` + `team-pill` + `#themeBtn` (🌙,
+  `onclick="toggleTheme()"`).
+- Nav inferior: 7 pestañas, incluida `#nav-config` (⚙️ `switchTab('config')`).
+- La pestaña Config ya tiene el toggle de tema.
+
+Plan sugerido:
+- En el header, reemplazar `#themeBtn` por un botón ⚙️ que haga
+  `switchTab('config')` (misma clase `icon-btn`).
+- Quitar `#nav-config` de la barra inferior (queda en 6 pestañas, más aireada)
+  — o dejarlo, a confirmar con Julio. Recomiendo sacarlo ya que el acceso pasa
+  al header.
+- `toggleTheme()`/`applyTheme()` no cambian; el toggle de tema queda solo en la
+  tarjeta Apariencia de Config. Verificar que `applyTheme` no dependa de
+  `#themeBtn` (hoy hace `document.getElementById('themeBtn').textContent=...`
+  → hay que **guardar contra null** o mover ese texto, si se elimina el botón).
+
+### 2. BUG del botón editar (lápiz) — diagnosticado
+Síntoma (Julio): al tocar el lápiz ✏️ en la ficha "no hace nada", y al tocar
+"volver atrás" recién ahí entra en la edición.
+
+Causa (confirmada leyendo el código):
+- `ovPlayerForm` está definido en el DOM **antes** (~línea 424) que `ovFicha`
+  (~línea 460), y **todos los `.overlay` comparten `z-index:30`**.
+- `fichaEdit()` → `openPlayerForm(fichaId)` abre el form pero **NO cierra
+  `ovFicha`**. Como con z-index igual pinta el último del DOM, la ficha queda
+  TAPANDO al formulario → parece que "no pasa nada".
+- Al tocar ← se cierra `ovFicha` y aparece el form que ya estaba abierto abajo
+  → "al volver atrás entra en edición".
+
+Arreglo recomendado (elegir uno):
+- (a) General y robusto: que `openOverlay(id)` **suba el overlay abierto por
+  encima** (ej. asignar un z-index creciente al que se abre, o reordenarlo como
+  último hijo). Arregla cualquier caso de overlay-sobre-overlay.
+- (b) Rápido: dar a `#ovPlayerForm` un `z-index` mayor (ej. 31), o moverlo en el
+  HTML para que quede DESPUÉS de `ovFicha`.
+- Revisar si otros overlays tienen el mismo problema según su orden en el DOM
+  (los definidos DESPUÉS de `ovFicha` —ovLesion, etc.— funcionan; los de ANTES
+  no, si se abren desde la ficha).
+
+### 3. Hacer la app instalable (PWA) de verdad
+Estado actual (verificado):
+- `manifest.webmanifest` correcto (name, short_name, start_url `./`, scope
+  `./`, display `standalone`, theme/background). Íconos OK y con tamaño real:
+  `icon-192` 192×192, `icon-512` 512×512, `icon-maskable` 512×512 (maskable).
+- SW registrado con handler `fetch` (network-first HTML). Sitio por HTTPS.
+- ⇒ En Chrome/Android **cumple los criterios**: se puede instalar desde el menú
+  del navegador. Lo que FALTA es descubribilidad y soporte iOS:
+  - **No hay botón "Instalar" en la app**: falta capturar `beforeinstallprompt`
+    (guardar el evento) y mostrar un botón (ej. en Config) que dispare
+    `prompt()`; ocultarlo tras `appinstalled`.
+  - **iOS/Safari no tiene prompt automático**: falta `<meta
+    name="apple-mobile-web-app-capable" content="yes">` (+ status-bar-style +
+    apple-mobile-web-app-title) para que abra en pantalla completa, y mostrar
+    una ayuda "Compartir → Agregar a inicio".
+- Antes de codear: confirmar con Julio **en qué teléfono/navegador** prueba
+  (iPhone/Safari vs Android/Chrome) porque el camino de instalación difiere.
+- Si se agregan metas/handlers nuevos, recordar que el SW se sirve
+  network-first para el HTML: la actualización llega sola; verificar el
+  estampado del `sw.js` tras publicar.
