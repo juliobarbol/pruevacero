@@ -64,6 +64,7 @@ grep -n "===== js/" index.html
 | `js/pdf.js` | informe PDF del jugador (`exportPlayerPdf`, jsPDF): datos, foto, pruebas, partidos, asistencia, radar rasterizado, lesiones, objetivos |
 | `js/tests.js` | creador de pruebas + jornadas + evolución (`renderEvolution`) |
 | `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
+| `js/groups.js` | Grupos de rendimiento (botón en Pruebas, overlay `ovGrupos`): 3 grupos DERIVADOS de la última marca, modo auto (tercios) o umbral (cortes en `testDef.grupos`); colores/nombres en `S.grupos`; benchmarking por posición, subió/bajó, armar equipos parejos |
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
 | `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |

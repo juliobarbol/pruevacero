@@ -275,6 +275,33 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
 .cr-pos{flex:none;min-width:30px;height:30px;border-radius:9px;background:var(--accent-dim);color:var(--accent);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0 5px}
 .cr-count{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:800;color:#fff}
 
+/* ============================ GRUPOS DE RENDIMIENTO ============================ */
+.gr-card{background:var(--surface);border:1px solid var(--border);border-left-width:5px;border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.gr-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.gr-dot{width:14px;height:14px;border-radius:50%;flex:none}
+.gr-name{font-weight:800;font-size:15px;flex:1;min-width:0}
+.gr-count{font-size:12px;font-weight:800;color:var(--muted);background:var(--surface2);border-radius:8px;padding:3px 8px}
+.gr-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--border)}
+.gr-row:last-child{border-bottom:none}
+.gr-row .avatar{width:32px;height:32px;font-size:12px}
+.gr-nm{flex:1;min-width:0;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gr-pos{font-size:10.5px;color:var(--muted);font-weight:700}
+.gr-mark{font-variant-numeric:tabular-nums;font-weight:800;font-size:13.5px;flex:none}
+.gr-move{font-size:11px;font-weight:800;margin-left:4px}
+.gr-empty{font-size:12px;color:var(--muted);padding:4px 0}
+.gr-seg{display:flex;gap:0;background:var(--surface2);border-radius:10px;padding:3px;margin:0 0 12px}
+.gr-seg button{flex:1;padding:7px 6px;border-radius:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.gr-seg button.on{background:var(--surface);color:var(--text)}
+.bench-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
+.bench th,.bench td{padding:8px 9px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.bench tr:last-child td{border-bottom:none}
+.bench th{font-size:11px;color:var(--muted);font-weight:700}
+.bench .best{color:var(--accent);font-weight:800}
+.bench .worst{color:var(--danger);font-weight:800}
+.gr-swatch{display:inline-flex;align-items:center;gap:8px;margin:6px 0}
+.gr-swatch input[type=color]{width:44px;height:38px;padding:2px;flex:none}
+
 @media(min-width:700px){
   main,.overlay{max-width:640px;margin:0 auto}
   header{padding-left:calc(50% - 306px);padding-right:calc(50% - 306px)}
@@ -466,6 +493,28 @@ table.stats{border-collapse:collapse;width:100%;font-size:12.5px}
   <div id="sessionBody"></div>
 </div>
 
+<!-- ══════════════ OVERLAY GRUPOS DE RENDIMIENTO ══════════════ -->
+<div class="overlay" id="ovGrupos">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovGrupos')">←</button>
+    <h2>Grupos de rendimiento</h2>
+    <button class="icon-btn" onclick="openGruposCfg()" title="Colores y nombres">🎨</button>
+  </div>
+  <div id="gruposBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY CONFIG DE GRUPOS ══════════════ -->
+<div class="overlay" id="ovGruposCfg">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovGruposCfg')">←</button>
+    <h2>Colores y nombres</h2>
+  </div>
+  <p class="hint">Ponele el nombre y el color que quieras a cada grupo. Se ven
+  solo por color y nombre, nunca como "nivel", para que nadie se sienta menos.</p>
+  <div id="gruposCfgBody"></div>
+  <div class="btn-row"><button class="btn" onclick="saveGruposCfg()">Guardar</button></div>
+</div>
+
 <!-- ══════════════ OVERLAY PARTIDO ══════════════ -->
 <div class="overlay" id="ovMatch">
   <div class="ov-head">
@@ -645,6 +694,14 @@ const DEF_ASPECTS = [
   { id:'a_actitud',    nombre:'Actitud' }
 ];
 
+// Grupos de rendimiento (3, editables). El orden es de "mejor" a "peor"
+// SOLO para calcular; en pantalla se muestra únicamente color + nombre.
+const DEF_GRUPOS = [
+  { id:'gA', nombre:'Verde', color:'#22c55e' },
+  { id:'gB', nombre:'Azul',  color:'#38bdf8' },
+  { id:'gC', nombre:'Rojo',  color:'#ef4444' }
+];
+
 const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', atacante:'Atacante' };
 const ROLES = {
   arquero: [],
@@ -669,12 +726,13 @@ function loadData(){
         d.attendance   = d.attendance   || [];
         d.evaluations  = d.evaluations  || [];
         d.evalAspects  = d.evalAspects  || DEF_ASPECTS.slice();
+        d.grupos       = d.grupos       || DEF_GRUPOS.map(g => Object.assign({}, g));
         return d;
       }
     }
   } catch(e){}
   return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[],
-           evaluations:[], evalAspects:DEF_ASPECTS.slice() };
+           evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)) };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -1521,9 +1579,12 @@ function renderPruebas(){
   const sessions = S.testSessions.filter(s => s.teamId === t.id)
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
   let html =
-    '<div class="btn-row" style="margin:0 0 12px">' +
+    '<div class="btn-row" style="margin:0 0 8px">' +
       '<button class="btn" onclick="sessionCreate()">➕ Nueva jornada</button>' +
       '<button class="btn sec" onclick="openTestsManager()">🛠 Mis pruebas</button>' +
+    '</div>' +
+    '<div class="btn-row" style="margin:0 0 12px">' +
+      '<button class="btn sec" onclick="openGrupos()">🎨 Grupos de rendimiento</button>' +
     '</div>';
   if (!sessions.length){
     html += '<div class="empty"><div class="big">📋</div>Sin jornadas todavía en <b>' + esc(t.nombre) + '</b>.<br><br>' +
@@ -2220,6 +2281,13 @@ async function cronoGuardar(){
   saveUI();
   crEnsureTick();
   toast('⏱ ' + n + ' tiempo' + (n === 1 ? '' : 's') + ' guardado' + (n === 1 ? '' : 's') + ' en la jornada de hoy');
+  // Aviso de grupo de rendimiento (si la prueba tiene rangos por umbral configurados)
+  if (def.grupos && def.grupos.modo === 'umbral'){
+    const avisos = pids.filter(pid => st.runners[pid].startAt && st.runners[pid].stopAt)
+      .map(pid => { const g = grLabelFor(pid, def.id); const pl = crPlayerOf(pid); return g ? esc(pl.nombre) + ' → ' + g : null; })
+      .filter(Boolean);
+    if (avisos.length) setTimeout(() => toast('🎨 ' + avisos.slice(0, 4).join(' · ')), 400);
+  }
   renderCrono();
   renderPruebas();
 }
@@ -2301,6 +2369,309 @@ function crBeep(freq, dur){
 }
 function crVib(p){
   try { if (navigator.vibrate) navigator.vibrate(p); } catch(e){}
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ===== js/groups.js ===== Grupos de rendimiento + benchmarking
+   ═══════════════════════════════════════════════════════════════════ */
+// Todo DERIVADO de los resultados: el grupo de un jugador sale de su última
+// marca en la prueba elegida. Lo único guardado es la config de corte por
+// prueba (testDef.grupos) y los 3 grupos globales (S.grupos: nombre+color).
+let grDefId = null;    // prueba elegida en la pantalla de grupos
+let grView = 'grupos'; // 'grupos' | 'posicion'
+let grCatId = '';      // filtro de categoría ('' = todas)
+let grLinea = '';      // filtro de posición ('' = todas)
+
+function grList(){ return (S.grupos && S.grupos.length === 3) ? S.grupos : (S.grupos = DEF_GRUPOS.map(g => Object.assign({}, g))); }
+// pruebas medibles (número o tiempo, con al menos un resultado cargado)
+function grDefs(){
+  return S.testDefs.filter(d => !d.archivada && d.tipo !== 'texto' && testUsage(d.id) > 0);
+}
+// última marca numérica del jugador en una prueba (o null)
+function grLast(pid, defId){
+  const h = testHistoryFor(pid, defId);
+  for (let i = h.length - 1; i >= 0; i--){ if (typeof h[i].v === 'number') return h[i]; }
+  return null;
+}
+// marca de la ANTEÚLTIMA jornada (para ver si subió/bajó de grupo)
+function grPrev(pid, defId){
+  const h = testHistoryFor(pid, defId).filter(x => typeof x.v === 'number');
+  return h.length >= 2 ? h[h.length - 2] : null;
+}
+// jugadores del equipo activo que entran al análisis (con filtros aplicados)
+function grPlayers(){
+  const t = activeTeam();
+  if (!t) return [];
+  return teamPlayers(t.id).filter(p => {
+    if (grCatId){ const c = playerCat(t, p); if (!c || c.id !== grCatId) return false; }
+    if (grLinea){ if ((p.posicion && p.posicion.linea || '') !== grLinea) return false; }
+    return true;
+  });
+}
+// índice de grupo (0..2, mejor→peor) para un valor dado, según config de la prueba
+function grIndexOf(def, v){
+  if (typeof v !== 'number') return null;
+  const cfg = def.grupos || { modo:'auto' };
+  if (cfg.modo === 'umbral' && cfg.cortes && cfg.cortes.length === 2){
+    // cortes ordenados de mejor a peor según mejorEs
+    const menor = def.mejorEs === 'menor';
+    const c = cfg.cortes;
+    if (menor) return v <= c[0] ? 0 : (v <= c[1] ? 1 : 2);
+    return v >= c[0] ? 0 : (v >= c[1] ? 1 : 2);
+  }
+  return null;   // 'auto' se resuelve por reparto (grAssignAuto)
+}
+// asigna por tercios sobre el conjunto presente (devuelve {pid: idx})
+function grAssignAuto(rows, def){
+  const menor = def.mejorEs === 'menor';
+  const sorted = rows.slice().sort((a, b) => menor ? a.v - b.v : b.v - a.v);   // mejor primero
+  const n = sorted.length, out = {};
+  sorted.forEach((r, i) => {
+    let idx = Math.floor(i * 3 / n);   // 0,1,2 en tercios
+    if (idx > 2) idx = 2;
+    out[r.pid] = idx;
+  });
+  return out;
+}
+
+/* --- pantalla de grupos --- */
+function openGrupos(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  const defs = grDefs();
+  if (!defs.length){ toast('Cargá algún resultado de prueba primero (número o tiempo)', true); return; }
+  if (!grDefId || !defs.some(d => d.id === grDefId)) grDefId = defs[0].id;
+  renderGrupos();
+  openOverlay('ovGrupos');
+}
+function grPickDef(id){ grDefId = id; renderGrupos(); }
+function grSetView(v){ grView = v; renderGrupos(); }
+function grSetCat(v){ grCatId = v; renderGrupos(); }
+function grSetLinea(v){ grLinea = v; renderGrupos(); }
+function grSetModo(m){
+  const def = testDefById(grDefId);
+  if (!def) return;
+  def.grupos = def.grupos || {};
+  def.grupos.modo = m;
+  if (m === 'umbral' && (!def.grupos.cortes || def.grupos.cortes.length !== 2)){
+    // sembrar cortes con los tercios actuales, para que arranque con algo sensato
+    const rows = grPlayers().map(p => { const l = grLast(p.id, def.id); return l ? { pid:p.id, v:l.v } : null; }).filter(Boolean);
+    if (rows.length){
+      const menor = def.mejorEs === 'menor';
+      const s = rows.map(r => r.v).sort((a, b) => menor ? a - b : b - a);
+      def.grupos.cortes = [s[Math.floor(s.length / 3)] || s[0], s[Math.floor(2 * s.length / 3)] || s[s.length - 1]];
+    }
+  }
+  saveData();
+  renderGrupos();
+}
+function grCorteIn(i, raw){
+  const def = testDefById(grDefId);
+  if (!def) return;
+  const v = def.tipo === 'tiempo' ? parseTiempo(raw) : Number(String(raw).replace(',', '.'));
+  if (v === null || isNaN(v)) return;
+  def.grupos = def.grupos || { modo:'umbral' };
+  def.grupos.cortes = def.grupos.cortes || [0, 0];
+  def.grupos.cortes[i] = v;
+  saveData();
+  renderGrupos();
+}
+function renderGrupos(){
+  const box = document.getElementById('gruposBody');
+  const t = activeTeam();
+  const def = testDefById(grDefId);
+  if (!box || !t || !def) return;
+  const gs = grList();
+  const cats = teamCats(t);
+
+  // selector de prueba
+  const defChips = grDefs().map(d =>
+    '<button class="chip' + (d.id === grDefId ? ' on' : '') + '" onclick="grPickDef(\'' + d.id + '\')">' + esc(d.nombre) + '</button>'
+  ).join('');
+
+  // filtros
+  const catSel = '<select onchange="grSetCat(this.value)"><option value="">Todas las categorías</option>' +
+    cats.map(c => '<option value="' + c.id + '"' + (c.id === grCatId ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') + '</select>';
+  const linSel = '<select onchange="grSetLinea(this.value)"><option value="">Todas las posiciones</option>' +
+    Object.keys(LINEAS).map(k => '<option value="' + k + '"' + (k === grLinea ? ' selected' : '') + '>' + LINEAS[k] + '</option>').join('') + '</select>';
+
+  const modo = (def.grupos && def.grupos.modo) || 'auto';
+  const cortes = (def.grupos && def.grupos.cortes) || [];
+  const unidadTxt = def.tipo === 'tiempo' ? '(min:seg)' : (def.unidad ? '(' + esc(def.unidad) + ')' : '');
+  let modoBox =
+    '<label style="margin-top:4px">Cómo se arman los grupos</label>' +
+    '<div class="gr-seg">' +
+      '<button class="' + (modo === 'auto' ? 'on' : '') + '" onclick="grSetModo(\'auto\')">Automático (por reparto)</button>' +
+      '<button class="' + (modo === 'umbral' ? 'on' : '') + '" onclick="grSetModo(\'umbral\')">Por rangos fijos</button>' +
+    '</div>';
+  if (modo === 'umbral'){
+    const c0 = cortes[0] != null ? (def.tipo === 'tiempo' ? fmtTiempo(cortes[0]) : cortes[0]) : '';
+    const c1 = cortes[1] != null ? (def.tipo === 'tiempo' ? fmtTiempo(cortes[1]) : cortes[1]) : '';
+    const attrs = def.tipo === 'tiempo' ? 'inputmode="numeric" placeholder="4:15"' : 'type="number" inputmode="decimal" step="0.01"';
+    const mejorTxt = def.mejorEs === 'menor' ? 'más chico = mejor' : 'más grande = mejor';
+    modoBox +=
+      '<p class="hint" style="margin:2px 0 6px">Cortes en ' + unidadTxt + ' (' + mejorTxt + '). ' +
+      'El grupo 1 es hasta el primer corte; el 3, del segundo en adelante.</p>' +
+      '<div class="med-row" style="margin-top:0">' +
+        '<div><label style="margin-top:0">Corte 1</label><input ' + attrs + ' value="' + esc(c0) + '" onchange="grCorteIn(0,this.value)"></div>' +
+        '<div><label style="margin-top:0">Corte 2</label><input ' + attrs + ' value="' + esc(c1) + '" onchange="grCorteIn(1,this.value)"></div>' +
+      '</div>';
+  }
+
+  // datos de jugadores con marca
+  const players = grPlayers();
+  const rows = players.map(p => { const l = grLast(p.id, def.id); return l ? { pid:p.id, p:p, v:l.v, fecha:l.fecha } : null; }).filter(Boolean);
+  const sinMarca = players.length - rows.length;
+
+  // asignación de grupo por jugador
+  let assign = {};
+  if (modo === 'umbral'){
+    rows.forEach(r => { const idx = grIndexOf(def, r.v); r.idx = (idx == null ? 2 : idx); assign[r.pid] = r.idx; });
+  } else {
+    assign = grAssignAuto(rows, def);
+    rows.forEach(r => r.idx = assign[r.pid]);
+  }
+
+  let body;
+  if (grView === 'posicion'){
+    body = grBenchHtml(def, rows);
+  } else {
+    body = gs.map((g, gi) => {
+      const mine = rows.filter(r => r.idx === gi).sort((a, b) => def.mejorEs === 'menor' ? a.v - b.v : b.v - a.v);
+      const list = mine.length ? mine.map(r => {
+        // ¿subió/bajó respecto de su marca anterior?
+        let mv = '';
+        const prev = grPrev(r.pid, def.id);
+        if (prev){
+          const pIdx = modo === 'umbral' ? (grIndexOf(def, prev.v) == null ? 2 : grIndexOf(def, prev.v)) : null;
+          if (pIdx != null && pIdx !== r.idx){
+            mv = pIdx > r.idx ? '<span class="gr-move" style="color:var(--accent)">▲ subió</span>'
+                              : '<span class="gr-move" style="color:var(--danger)">▼ bajó</span>';
+          }
+        }
+        return '<div class="gr-row">' + avatarHtml(r.p) +
+          '<div style="flex:1;min-width:0"><div class="gr-nm">' + esc(r.p.nombre + ' ' + (r.p.apellido || '')) + mv + '</div>' +
+          '<div class="gr-pos">' + esc(posLabel(r.p) || '—') + '</div></div>' +
+          '<div class="gr-mark">' + fmtTestVal(def, r.v) + '</div></div>';
+      }).join('') : '<div class="gr-empty">Sin jugadores en este grupo.</div>';
+      return '<div class="gr-card" style="border-left-color:' + g.color + '">' +
+        '<div class="gr-head"><span class="gr-dot" style="background:' + g.color + '"></span>' +
+        '<span class="gr-name">' + esc(g.nombre) + '</span>' +
+        '<span class="gr-count">' + mine.length + '</span></div>' + list + '</div>';
+    }).join('');
+    body += '<div class="btn-row"><button class="btn sec" onclick="grArmarEquipos()">⚖️ Armar equipos parejos</button></div>';
+  }
+
+  box.innerHTML =
+    '<label style="margin-top:0">Prueba</label><div class="chips">' + defChips + '</div>' +
+    '<div class="med-row" style="margin-top:0"><div>' + catSel + '</div><div>' + linSel + '</div></div>' +
+    modoBox +
+    '<div class="gr-seg" style="margin-top:12px">' +
+      '<button class="' + (grView === 'grupos' ? 'on' : '') + '" onclick="grSetView(\'grupos\')">Por grupos</button>' +
+      '<button class="' + (grView === 'posicion' ? 'on' : '') + '" onclick="grSetView(\'posicion\')">Por posición</button>' +
+    '</div>' +
+    (rows.length ? body : '<div class="empty"><div class="big">📊</div>Nadie tiene marca en <b>' + esc(def.nombre) + '</b>' +
+      (grCatId || grLinea ? ' con estos filtros' : '') + ' todavía.</div>') +
+    (sinMarca > 0 ? '<p class="hint" style="margin-top:8px">' + sinMarca + ' jugador' + (sinMarca === 1 ? '' : 'es') + ' sin marca en esta prueba (no entra' + (sinMarca === 1 ? '' : 'n') + ' al reparto).</p>' : '');
+}
+
+/* --- benchmarking por posición: mejor y peor de cada línea --- */
+function grBenchHtml(def, rows){
+  const menor = def.mejorEs === 'menor';
+  let out = '<div class="bench-wrap"><table class="bench"><thead><tr>' +
+    '<th>Posición</th><th>Mejor</th><th>Más flojo</th><th>Prom.</th></tr></thead><tbody>';
+  const lineas = Object.keys(LINEAS);
+  let any = false;
+  lineas.forEach(k => {
+    const mine = rows.filter(r => (r.p.posicion && r.p.posicion.linea) === k);
+    if (!mine.length) return;
+    any = true;
+    const best = mine.reduce((a, b) => (menor ? b.v < a.v : b.v > a.v) ? b : a);
+    const worst = mine.reduce((a, b) => (menor ? b.v > a.v : b.v < a.v) ? b : a);
+    const avg = mine.reduce((s, r) => s + r.v, 0) / mine.length;
+    const nm = r => esc(r.p.nombre + ' ' + (r.p.apellido || '')).trim();
+    out += '<tr><td><b>' + LINEAS[k] + '</b> <span class="gr-pos">(' + mine.length + ')</span></td>' +
+      '<td><span class="best">' + fmtTestVal(def, best.v) + '</span><div class="gr-pos">' + nm(best) + '</div></td>' +
+      (mine.length > 1 ? '<td><span class="worst">' + fmtTestVal(def, worst.v) + '</span><div class="gr-pos">' + nm(worst) + '</div></td>' : '<td>—</td>') +
+      '<td>' + fmtTestVal(def, Math.round(avg * 100) / 100) + '</td></tr>';
+  });
+  out += '</tbody></table></div>';
+  if (!any) out = '<div class="empty">Los jugadores con marca no tienen posición cargada.<br>Cargá la posición en la ficha para ver este cuadro.</div>';
+  else out += '<p class="hint" style="margin-top:8px">Verde = la mejor marca de la posición · rojo = la más floja. Sirve como referencia de cada perfil.</p>';
+  return out;
+}
+
+/* --- armar equipos parejos por rendimiento (reparto serpiente) --- */
+async function grArmarEquipos(){
+  const def = testDefById(grDefId);
+  if (!def) return;
+  const rows = grPlayers().map(p => { const l = grLast(p.id, def.id); return l ? { p:p, v:l.v } : null; }).filter(Boolean);
+  if (rows.length < 2){ toast('Hacen falta al menos 2 jugadores con marca', true); return; }
+  const nStr = await appPromptText('Armar equipos parejos', '¿Cuántos equipos? (2 a 4)', '2');
+  const nEq = Math.max(2, Math.min(4, Math.round(Number(nStr) || 0)));
+  if (!nEq){ return; }
+  const menor = def.mejorEs === 'menor';
+  rows.sort((a, b) => menor ? a.v - b.v : b.v - a.v);   // mejor primero
+  // reparto serpiente: 0,1,2,2,1,0,0,1,2… mantiene los equipos equilibrados
+  const teams = Array.from({ length:nEq }, () => []);
+  let dir = 1, k = 0;
+  rows.forEach(r => {
+    teams[k].push(r);
+    if (dir === 1){ if (k === nEq - 1) dir = -1; else k++; }
+    else { if (k === 0) dir = 1; else k--; }
+  });
+  const cols = ['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'];
+  let html = '<label style="margin-top:0">Equipos equilibrados por <b>' + esc(def.nombre) + '</b></label>';
+  teams.forEach((tm, i) => {
+    const prom = tm.reduce((s, r) => s + r.v, 0) / tm.length;
+    html += '<div class="gr-card" style="border-left-color:' + cols[i] + '">' +
+      '<div class="gr-head"><span class="gr-dot" style="background:' + cols[i] + '"></span>' +
+      '<span class="gr-name">Equipo ' + (i + 1) + '</span>' +
+      '<span class="gr-count">prom ' + fmtTestVal(def, Math.round(prom * 100) / 100) + '</span></div>' +
+      tm.map(r => '<div class="gr-row">' + avatarHtml(r.p) +
+        '<div class="gr-nm" style="flex:1">' + esc(r.p.nombre + ' ' + (r.p.apellido || '')) + '</div>' +
+        '<div class="gr-mark">' + fmtTestVal(def, r.v) + '</div></div>').join('') + '</div>';
+  });
+  document.getElementById('gruposBody').innerHTML = html +
+    '<div class="btn-row"><button class="btn" onclick="renderGrupos()">← Volver a los grupos</button></div>';
+}
+
+/* --- config de colores y nombres --- */
+function openGruposCfg(){ renderGruposCfg(); openOverlay('ovGruposCfg'); }
+function renderGruposCfg(){
+  const gs = grList();
+  document.getElementById('gruposCfgBody').innerHTML = gs.map((g, i) =>
+    '<div class="gr-swatch">' +
+      '<input type="color" value="' + esc(g.color) + '" oninput="grList()[' + i + '].color=this.value">' +
+      '<input type="text" value="' + esc(g.nombre) + '" oninput="grList()[' + i + '].nombre=this.value" placeholder="Nombre del grupo">' +
+    '</div>'
+  ).join('');
+}
+function saveGruposCfg(){
+  grList().forEach(g => { if (!g.nombre || !g.nombre.trim()) g.nombre = 'Grupo'; });
+  saveData();
+  closeOverlay('ovGruposCfg');
+  if (document.getElementById('ovGrupos').classList.contains('open')) renderGrupos();
+  toast('Grupos actualizados');
+}
+// etiqueta del grupo de un jugador en una prueba (para el toast del Crono / PDF)
+function grLabelFor(pid, defId){
+  const def = testDefById(defId);
+  if (!def) return null;
+  const last = grLast(pid, defId);
+  if (!last) return null;
+  const gs = grList();
+  const modo = (def.grupos && def.grupos.modo) || 'auto';
+  let idx;
+  if (modo === 'umbral'){ idx = grIndexOf(def, last.v); if (idx == null) idx = 2; }
+  else {
+    const t = S.players.find(x => x.id === pid);
+    const teamId = t ? t.teamId : null;
+    const rows = S.players.filter(x => x.teamId === teamId)
+      .map(x => { const l = grLast(x.id, defId); return l ? { pid:x.id, v:l.v } : null; }).filter(Boolean);
+    idx = grAssignAuto(rows, def)[pid];
+  }
+  return (gs[idx] || {}).nombre || null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -3784,6 +4155,7 @@ function importBackupFile(ev){
       S.attendance = S.attendance || [];
       S.evaluations = S.evaluations || [];
       S.evalAspects = S.evalAspects || DEF_ASPECTS.slice();
+      S.grupos = S.grupos || DEF_GRUPOS.map(g => Object.assign({}, g));
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
