@@ -122,6 +122,15 @@ testSession = {                // una "jornada de pruebas" de un equipo
   vueltas?: { [playerId]: { [testDefId]: [seg, ...] } }  // parciales del ⏱ Crono
 }
 
+// GRUPOS DE RENDIMIENTO (derivados; solo se guarda la config)
+S.grupos = [{ id, nombre, color }, x3]   // 3 grupos globales, nombre+color editables
+testDef.grupos = {                        // cómo cortar ESA prueba en grupos
+  modo: 'auto'|'umbral',                  // auto = tercios del plantel; umbral = rangos fijos
+  cortes?: [v1, v2]                       // 2 cortes en la unidad de la prueba (seg si tiempo)
+}
+// El grupo de un jugador NO se guarda: se deriva de su última marca
+// (grLabelFor / grIndexOf / grAssignAuto). mejorEs define qué extremo es "mejor".
+
 match = {                      // shape REAL implementado en Etapa 3
   id, teamId, fecha, rival,
   golesFavor, golesContra,     // resultado (null = sin cargar)
@@ -245,3 +254,28 @@ Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
   de baja en ámbar; objetivos con cuadrito verde (cumplido) / ámbar
   (pendiente). Pie con numeración de página. Helpers `_pdfTiles`,
   `_pdfDataGrid`, `_pdfTri` en `js/pdf.js`.
+
+### Grupos de rendimiento y benchmarking (2026-07-08, pedido de Julio)
+
+Botón "🎨 Grupos de rendimiento" en la pestaña Pruebas (`js/groups.js`,
+overlay `ovGrupos`). Todo DERIVADO de los resultados; lo único guardado es la
+config (`S.grupos` global + `testDef.grupos` por prueba).
+
+- **Segmentación en 3 grupos** por prueba, en dos modos: **automático** (parte
+  el plantel en tercios) o **por rangos fijos** (2 cortes en min:seg/número que
+  define el profe). Aplica a cualquier prueba numérica/tiempo (respeta
+  `mejorEs`).
+- **Colores + nombres editables** (`ovGruposCfg`), default Verde/Azul/Rojo. Se
+  muestran solo por color y nombre, nunca como "nivel", para no jerarquizar.
+- **Filtros** por categoría y por posición.
+- **Subió/bajó de grupo** vs la jornada anterior (flechita).
+- **Benchmarking por posición** (toggle "Por posición"): mejor y más flojo de
+  cada línea + promedio.
+- **Armar equipos parejos** (2–4) por reparto serpiente sobre el rendimiento,
+  para picados de entrenamiento equilibrados.
+- Integración con el ⏱ Crono: al guardar, si la prueba tiene rangos por
+  umbral, avisa el grupo de cada jugador.
+
+Ideas para 2ª tanda (no implementadas aún): percentil dentro de la categoría,
+elegir 2–4 grupos, grupos en el PDF, cruces con lesiones/asistencia, objetivo
+automático para el grupo más flojo.
