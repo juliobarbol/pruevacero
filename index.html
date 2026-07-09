@@ -320,7 +320,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <span id="teamPillLogo" style="display:contents"></span>
     <span id="teamPillName">Sin equipo</span><span class="caret">▼</span>
   </button>
-  <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Tema">🌙</button>
+  <button class="icon-btn" id="configBtn" onclick="switchTab('config')" title="Configuración">⚙️</button>
 </header>
 
 <main>
@@ -398,7 +398,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     </div>
     <div class="card">
       <h3>🎨 Apariencia</h3>
-      <div class="btn-row"><button class="btn sec" onclick="toggleTheme()">Cambiar tema claro / oscuro</button></div>
+      <div class="btn-row"><button class="btn sec" id="themeToggleBtn" onclick="toggleTheme()">Cambiar tema claro / oscuro</button></div>
     </div>
     <div class="card">
       <h3>ℹ️ PruevaCero</h3>
@@ -417,7 +417,6 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
   <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Clases</button>
   <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
-  <button id="nav-config" onclick="switchTab('config')"><span class="ic">⚙️</span>Config</button>
 </nav>
 
 <!-- ══════════════ OVERLAY EQUIPOS ══════════════ -->
@@ -984,7 +983,8 @@ function logoTeamFile(ev){
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme', t);
   try { localStorage.setItem(LS.THEME, t); } catch(e){}
-  document.getElementById('themeBtn').textContent = (t === 'dark') ? '🌙' : '☀️';
+  const tb = document.getElementById('themeToggleBtn');
+  if (tb) tb.textContent = (t === 'dark') ? '🌙 Tema oscuro — tocá para cambiar' : '☀️ Tema claro — tocá para cambiar';
   const mc = document.querySelector('meta[name="theme-color"]');
   if (mc) mc.setAttribute('content', t === 'dark' ? '#0f172a' : '#f1f5f9');
 }
