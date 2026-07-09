@@ -282,9 +282,9 @@ automático para el grupo más flojo.
 
 ## PENDIENTES — próxima sesión (anotado 2026-07-08, pedido de Julio)
 
-> Julio pidió 3 cosas (anotadas 2026-07-08). El **2026-07-09 se hicieron la 1
-> (botón de Config al header) y la 3 (app instalable)**. Queda pendiente solo la
-> **2 (bug del lápiz)**, con el diagnóstico ya hecho abajo para arrancar directo.
+> Julio pidió 3 cosas (anotadas 2026-07-08). **Las 3 quedaron HECHAS el
+> 2026-07-09**: 1 (botón de Config al header), 2 (bug del lápiz) y 3 (app
+> instalable). Detalle de cada una abajo.
 
 ### 1. ✅ HECHO (2026-07-09) — Botón de Config al header + tema en Config
 - El **⚙️ Configuración pasó al header** (donde estaba el 🌙), hace
@@ -294,28 +294,19 @@ automático para el grupo más flojo.
   (`#themeToggleBtn`, ahora muestra el modo actual). `applyTheme` ya no toca
   `#themeBtn` (eliminado); actualiza `#themeToggleBtn` con guarda contra null.
 
-### 2. BUG del botón editar (lápiz) — diagnosticado
-Síntoma (Julio): al tocar el lápiz ✏️ en la ficha "no hace nada", y al tocar
-"volver atrás" recién ahí entra en la edición.
+### 2. ✅ HECHO (2026-07-09) — BUG del botón editar (lápiz)
+Síntoma: al tocar el lápiz ✏️ en la ficha "no hacía nada"; recién al tocar
+"volver atrás" entraba en la edición.
 
-Causa (confirmada leyendo el código):
-- `ovPlayerForm` está definido en el DOM **antes** (~línea 424) que `ovFicha`
-  (~línea 460), y **todos los `.overlay` comparten `z-index:30`**.
-- `fichaEdit()` → `openPlayerForm(fichaId)` abre el form pero **NO cierra
-  `ovFicha`**. Como con z-index igual pinta el último del DOM, la ficha queda
-  TAPANDO al formulario → parece que "no pasa nada".
-- Al tocar ← se cierra `ovFicha` y aparece el form que ya estaba abierto abajo
-  → "al volver atrás entra en edición".
+Causa: `ovPlayerForm` está antes que `ovFicha` en el DOM y todos los `.overlay`
+compartían `z-index:30`; `fichaEdit()` abría el form sin cerrar la ficha, así
+que la ficha (posterior en el DOM) tapaba al form.
 
-Arreglo recomendado (elegir uno):
-- (a) General y robusto: que `openOverlay(id)` **suba el overlay abierto por
-  encima** (ej. asignar un z-index creciente al que se abre, o reordenarlo como
-  último hijo). Arregla cualquier caso de overlay-sobre-overlay.
-- (b) Rápido: dar a `#ovPlayerForm` un `z-index` mayor (ej. 31), o moverlo en el
-  HTML para que quede DESPUÉS de `ovFicha`.
-- Revisar si otros overlays tienen el mismo problema según su orden en el DOM
-  (los definidos DESPUÉS de `ovFicha` —ovLesion, etc.— funcionan; los de ANTES
-  no, si se abren desde la ficha).
+Arreglo aplicado (opción a, general): `openOverlay(id)` ahora le da al overlay
+que se abre un `z-index` por encima de los ya abiertos (`31 + nº de overlays
+abiertos`, tope 44 para no pisar la cuenta regresiva del crono `45` ni los
+modales `50`); `closeOverlay` limpia el `z-index` inline. Sirve para cualquier
+caso de overlay-sobre-overlay, no solo el lápiz.
 
 ### 3. ✅ HECHO (2026-07-09) — App instalable (PWA)
 - Metas `apple-mobile-web-app-*` (pantalla completa / título / status bar) +
