@@ -282,34 +282,17 @@ automático para el grupo más flojo.
 
 ## PENDIENTES — próxima sesión (anotado 2026-07-08, pedido de Julio)
 
-> Julio pidió estas 3 cosas y aclaró que quedaran ANOTADAS para hacerlas en
-> otra sesión (no se implementaron todavía). Diagnóstico ya hecho abajo para
-> arrancar directo.
+> Julio pidió 3 cosas (anotadas 2026-07-08). El **2026-07-09 se hicieron la 1
+> (botón de Config al header) y la 3 (app instalable)**. Queda pendiente solo la
+> **2 (bug del lápiz)**, con el diagnóstico ya hecho abajo para arrancar directo.
 
-### 1. Reordenar botón de Config y tema (UI del header)
-Qué quiere Julio:
-- El **botón de Configuración (⚙️) va ARRIBA, en el header**, en el lugar donde
-  hoy está el botón de tema (🌙/☀️).
-- El **botón de tema claro/oscuro va DENTRO de la pestaña Config** (ya existe
-  ahí la tarjeta "🎨 Apariencia" con `toggleTheme()`, así que el toggle del
-  header pasa a ser redundante y se saca).
-
-Estado actual (para implementar):
-- Header (HTML ~línea 270): `brand ⚽` + `team-pill` + `#themeBtn` (🌙,
-  `onclick="toggleTheme()"`).
-- Nav inferior: 7 pestañas, incluida `#nav-config` (⚙️ `switchTab('config')`).
-- La pestaña Config ya tiene el toggle de tema.
-
-Plan sugerido:
-- En el header, reemplazar `#themeBtn` por un botón ⚙️ que haga
-  `switchTab('config')` (misma clase `icon-btn`).
-- Quitar `#nav-config` de la barra inferior (queda en 6 pestañas, más aireada)
-  — o dejarlo, a confirmar con Julio. Recomiendo sacarlo ya que el acceso pasa
-  al header.
-- `toggleTheme()`/`applyTheme()` no cambian; el toggle de tema queda solo en la
-  tarjeta Apariencia de Config. Verificar que `applyTheme` no dependa de
-  `#themeBtn` (hoy hace `document.getElementById('themeBtn').textContent=...`
-  → hay que **guardar contra null** o mover ese texto, si se elimina el botón).
+### 1. ✅ HECHO (2026-07-09) — Botón de Config al header + tema en Config
+- El **⚙️ Configuración pasó al header** (donde estaba el 🌙), hace
+  `switchTab('config')`.
+- Se quitó `#nav-config` de la barra inferior → **6 pestañas**.
+- El toggle de tema quedó **solo en la tarjeta Apariencia** de Config
+  (`#themeToggleBtn`, ahora muestra el modo actual). `applyTheme` ya no toca
+  `#themeBtn` (eliminado); actualiza `#themeToggleBtn` con guarda contra null.
 
 ### 2. BUG del botón editar (lápiz) — diagnosticado
 Síntoma (Julio): al tocar el lápiz ✏️ en la ficha "no hace nada", y al tocar
@@ -334,23 +317,11 @@ Arreglo recomendado (elegir uno):
   (los definidos DESPUÉS de `ovFicha` —ovLesion, etc.— funcionan; los de ANTES
   no, si se abren desde la ficha).
 
-### 3. Hacer la app instalable (PWA) de verdad
-Estado actual (verificado):
-- `manifest.webmanifest` correcto (name, short_name, start_url `./`, scope
-  `./`, display `standalone`, theme/background). Íconos OK y con tamaño real:
-  `icon-192` 192×192, `icon-512` 512×512, `icon-maskable` 512×512 (maskable).
-- SW registrado con handler `fetch` (network-first HTML). Sitio por HTTPS.
-- ⇒ En Chrome/Android **cumple los criterios**: se puede instalar desde el menú
-  del navegador. Lo que FALTA es descubribilidad y soporte iOS:
-  - **No hay botón "Instalar" en la app**: falta capturar `beforeinstallprompt`
-    (guardar el evento) y mostrar un botón (ej. en Config) que dispare
-    `prompt()`; ocultarlo tras `appinstalled`.
-  - **iOS/Safari no tiene prompt automático**: falta `<meta
-    name="apple-mobile-web-app-capable" content="yes">` (+ status-bar-style +
-    apple-mobile-web-app-title) para que abra en pantalla completa, y mostrar
-    una ayuda "Compartir → Agregar a inicio".
-- Antes de codear: confirmar con Julio **en qué teléfono/navegador** prueba
-  (iPhone/Safari vs Android/Chrome) porque el camino de instalación difiere.
-- Si se agregan metas/handlers nuevos, recordar que el SW se sirve
-  network-first para el HTML: la actualización llega sola; verificar el
-  estampado del `sw.js` tras publicar.
+### 3. ✅ HECHO (2026-07-09) — App instalable (PWA)
+- Metas `apple-mobile-web-app-*` (pantalla completa / título / status bar) +
+  `mobile-web-app-capable` para iOS.
+- Módulo `js/pwa.js`: captura `beforeinstallprompt`, muestra el botón
+  **"📲 Instalar app"** en la tarjeta Config y lo oculta tras `appinstalled`.
+  Ayuda contextual (`refreshInstallCard`): botón real en Android/Chrome,
+  "Compartir → Agregar a inicio" en iOS/Safari, "ya está instalada" en modo
+  standalone.
