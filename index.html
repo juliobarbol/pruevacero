@@ -1008,8 +1008,24 @@ function switchTab(t){
   if (t === 'clases') renderClases();
   window.scrollTo(0, 0);
 }
-function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
-function openOverlay(id){ document.getElementById(id).classList.add('open'); window.scrollTo(0,0); }
+function closeOverlay(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('open');
+  el.style.zIndex = '';          // vuelve al z-index base (30)
+}
+function openOverlay(id){
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Apilar SOBRE los overlays ya abiertos (todos comparten z-index:30 en el CSS,
+  // así que sin esto el que va después en el DOM tapa al que se abre encima —
+  // era el bug del lápiz: el form quedaba debajo de la ficha). Tope 44 para no
+  // pasar la cuenta regresiva del crono (45) ni los modales (50).
+  const others = Array.from(document.querySelectorAll('.overlay.open')).filter(o => o.id !== id).length;
+  el.style.zIndex = String(Math.min(44, 31 + others));
+  el.classList.add('open');
+  window.scrollTo(0,0);
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/teams.js ===== Equipos: crear, elegir, renombrar, borrar
