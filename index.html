@@ -8,6 +8,10 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PruevaCero">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <script>
@@ -383,6 +387,15 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
       de PruevaCero y la agrega al equipo activo.</p>
       <div class="btn-row"><button class="btn sec" onclick="document.getElementById('filePlayer').click()">📥 Importar ficha</button></div>
     </div>
+    <div class="card" id="installCard">
+      <h3>📲 Instalar en el teléfono</h3>
+      <p class="hint">Instalá PruevaCero como app: se abre a pantalla completa,
+      con su propio ícono y anda sin internet.</p>
+      <div class="btn-row" id="installBtnRow" style="display:none">
+        <button class="btn" onclick="pwaInstall()">📲 Instalar app</button>
+      </div>
+      <p class="hint" id="installHelp"></p>
+    </div>
     <div class="card">
       <h3>🎨 Apariencia</h3>
       <div class="btn-row"><button class="btn sec" onclick="toggleTheme()">Cambiar tema claro / oscuro</button></div>
@@ -390,8 +403,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <div class="card">
       <h3>ℹ️ PruevaCero</h3>
       <p class="hint">App de análisis y seguimiento de jugadores de fútbol.
-      Funciona sin internet; instalala desde el menú del navegador
-      ("Agregar a pantalla de inicio"). Versión: Etapa 1.</p>
+      Funciona sin internet una vez instalada.</p>
     </div>
   </section>
 </main>
@@ -4169,6 +4181,60 @@ function importBackupFile(ev){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/pwa.js ===== Instalar la app (PWA): botón Android + ayuda iOS
+   ═══════════════════════════════════════════════════════════════════ */
+let _deferredInstall = null;   // evento beforeinstallprompt guardado (Android/Chrome)
+
+function _isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function _isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+// Ajusta la tarjeta "Instalar" según el estado (ya instalada / con prompt / iOS / genérico)
+function refreshInstallCard(){
+  const row = document.getElementById('installBtnRow');
+  const help = document.getElementById('installHelp');
+  if (!row || !help) return;
+  if (_isStandalone()){
+    row.style.display = 'none';
+    help.textContent = '✅ Ya está instalada en este dispositivo.';
+    return;
+  }
+  if (_deferredInstall){
+    row.style.display = 'flex';
+    help.textContent = '';
+    return;
+  }
+  row.style.display = 'none';
+  if (_isIOS()){
+    help.innerHTML = 'En iPhone/iPad: tocá <b>Compartir</b> (el cuadradito con la ' +
+      'flecha ↑, abajo en Safari) y elegí <b>“Agregar a inicio”</b>.';
+  } else {
+    help.textContent = 'Si no aparece el botón, abrí el menú del navegador (⋮) y ' +
+      'elegí “Instalar app” o “Agregar a pantalla de inicio”.';
+  }
+}
+async function pwaInstall(){
+  if (!_deferredInstall){ refreshInstallCard(); return; }
+  const ev = _deferredInstall;
+  _deferredInstall = null;
+  ev.prompt();
+  try { await ev.userChoice; } catch(e){}
+  refreshInstallCard();
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();          // evitamos el mini-banner y lo mostramos nosotros
+  _deferredInstall = e;
+  refreshInstallCard();
+});
+window.addEventListener('appinstalled', () => {
+  _deferredInstall = null;
+  toast('✅ App instalada');
+  refreshInstallCard();
+});
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/core.js ===== Arranque + PWA
    ═══════════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
@@ -4177,6 +4243,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!UI.teamId && S.teams.length) UI.teamId = S.teams[0].id;
 
   applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  refreshInstallCard();
   renderTeamBar();
   renderPlayers();
   switchTab(UI.tab && document.getElementById('tab-' + UI.tab) ? UI.tab : 'jugadores');
