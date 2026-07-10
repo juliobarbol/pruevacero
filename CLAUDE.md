@@ -4,6 +4,13 @@
 > **La hoja de ruta viva (etapas hechas/pendientes y decisiones de producto)
 > está en `PLAN.md` — leela SIEMPRE antes de implementar algo nuevo y
 > mantenela al día (marcar etapas HECHAS, anotar decisiones nuevas de Julio).**
+>
+> **AUTORIZACIÓN PERMANENTE DE JULIO (2026-07-10): después de completar y
+> verificar un cambio, mergear a `main` y hacer push SIN pedir permiso.**
+> Julio no puede probar en la rama de trabajo (solo prueba en la app
+> publicada), así que publicar es la única forma de que vea el cambio.
+> Siempre verificar sintaxis + funcional ANTES de mergear (sos el único
+> control de calidad). PR solo si Julio lo pide explícitamente.
 
 ## Qué es
 
