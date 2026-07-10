@@ -86,7 +86,9 @@ player = {
   antecedentes: { aniosPractica, otrosDeportes: [texto] },
   posicion: { linea: 'arquero'|'defensor'|'medio'|'atacante',
               rol:   'central'|'lateral'|'recuperacion'|'creacion'|
-                     'centroatacante'|'extremo'|null },
+                     'derecha'|'izquierda'|'centroatacante'|'extremo'|null,
+              otros: ['linea:rol', …],      // versatilidad (multiposición)
+              preferida: 'linea:rol'|'' },  // donde se siente más cómodo
   historialEquipos: [{teamId, desde, hasta}],          // se llena al mover
   lesiones: [{fecha, tipo, diasBaja, notas}],          // etapa 7
   objetivos: [{texto, creado, cumplido?}],             // etapa 7
@@ -171,6 +173,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 8 | Evaluación técnica/táctica 1–10 con **gráfico de radar** + comparación contra promedio de la categoría (aspectos configurables, en la ficha) | HECHA (2026-07-06) |
 | 9 | Historial de lesiones + objetivos por jugador | PENDIENTE |
 | 10 | Informe PDF del jugador (ficha + pruebas + radar + estadísticas, jsPDF) | PENDIENTE |
+| 11 | **Menú de posiciones ampliado**: medio suma "por derecha" y "por izquierda"; **Otros puestos** (multiposición, checkboxes) y **Posición preferida** (donde se siente cómodo) en la ficha/form y en el Excel | HECHA (2026-07-10) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
