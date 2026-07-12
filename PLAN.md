@@ -161,7 +161,10 @@ exercise = {                   // ejercicio de la pizarra táctica (Etapa 12)
   plan: { dia (0-6|null), micro, etapa },  // etapa: acumulacion|transformacion|realizacion
   board: {                     // lo dibujado en la cancha (viewBox 68×105)
     view: 'chips'|'figs',      // chapitas o figuras de jugador
-    tokens: [{ id, kind:'A'|'B'|'ball', num, x, y }],
+    tokens: [{ id, kind:'A'|'B'|'ball', num, x, y,
+               pid?, label? }],   // pid = jugador real; label = nombre bajo la ficha
+    // jugadores/pid pueden ser de CUALQUIER equipo (filtro equipo+categoría
+    // en el editor solo busca; la elección es manual y libre)
     zones:  [{ id, shape:'rect'|'circle'|'tri', x, y, w, h, color }]
   }
 }
@@ -222,6 +225,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 12 | **Pizarra táctica — base** (pestaña 📋 Pizarra, pedido 2026-07-12): cancha SVG con dos equipos + pelota arrastrables, vista chapitas/figuras, zonas sombreadas (cuadrado/rectángulo/círculo/triángulo, movibles y con tamaño/color editables) y ficha del ejercicio: nombre, descripción, materiales, categoría + jugadores participantes, dosificación (duración, series, reps, pasada, descanso, intensidad, densidad derivada) y planificación (día, microciclo, etapa acumulación/transformación/realización) | HECHA (2026-07-12) |
 | 13 | **Pizarra táctica — animación**: pasos clave (fotogramas en `board.frames`, migración automática de ejercicios viejos) + ▶ Play con movimiento suave (interpolación con easing, rAF) | HECHA (2026-07-12) |
 | 14 | **Pizarra táctica — video y pulido**: 🎥 exportar la animación como video WebM (canvas + `captureStream` + `MediaRecorder`, dibuja la misma escena en canvas), ⧉ duplicar ejercicio, y tarjeta "Ejercicios planificados para hoy" en la pestaña Clases (por día de la semana del ejercicio) | HECHA (2026-07-12) |
+| 15 | **Pizarra — nombres y jugadores reales** (pedido 2026-07-12): nombre debajo de cada ficha (🏷 manual en cualquier ficha, o automático al subir participantes); en Participantes, filtro por **equipo y categoría** para buscar jugadores de CUALQUIER equipo (elección manual libre) y botones "🔴/🔵 Ponerlos en la cancha" (crea fichas con `pid` + nombre, sin duplicar) | HECHA (2026-07-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 

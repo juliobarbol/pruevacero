@@ -696,9 +696,20 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <label>Materiales</label><textarea id="pzMat" rows="2" placeholder="Conos, pecheras, pelotas…"></textarea>
 
   <h3 class="pz-h3">👥 Participantes</h3>
-  <label>Categoría</label><select id="pzCat" onchange="pzRenderPlayers()"></select>
-  <label>Jugadores que participan</label>
-  <div class="chips" id="pzPlayers" style="flex-wrap:wrap"></div>
+  <label>Categoría a la que apunta el ejercicio</label><select id="pzCat"></select>
+  <label>Buscar jugadores para sumar (de cualquier equipo y categoría)</label>
+  <div class="form-grid">
+    <div><select id="pzEqF" onchange="pzEqFChange()"></select></div>
+    <div><select id="pzCatF" onchange="pzRenderPlayers()"></select></div>
+  </div>
+  <div class="chips" id="pzPlayers" style="flex-wrap:wrap;margin-top:8px"></div>
+  <div class="btn-row" style="margin-top:6px">
+    <button class="btn sec mini" onclick="pzPlayersToBoard('A')">🔴 Ponerlos en la cancha</button>
+    <button class="btn sec mini" onclick="pzPlayersToBoard('B')">🔵 Ponerlos en la cancha</button>
+  </div>
+  <p class="hint" style="margin-top:6px">Los participantes elegidos entran a la
+  cancha con su nombre debajo de la ficha. También podés ponerle nombre a
+  cualquier ficha a mano: seleccionala y tocá 🏷.</p>
 
   <h3 class="pz-h3">⏱️ Dosificación de la carga</h3>
   <div class="form-grid">
@@ -3891,7 +3902,7 @@ function pzOpenUI(title){
   document.getElementById('pzEtapa').value = pz.plan.etapa || '';
   pzFrame = 0;
   pzLoadPos(0);
-  pzRenderCatSel(); pzRenderPlayers(); pzRenderDias(); pzDensCalc();
+  pzRenderCatSel(); pzRenderEqF(); pzRenderCatF(); pzRenderPlayers(); pzRenderDias(); pzDensCalc();
   pzRenderTools(); pzRenderFrames(); pzRenderBoard();
   pzCollect();
   pzSnap = JSON.stringify(pz);
@@ -3944,11 +3955,25 @@ function pzRenderCatSel(){
     '<option value="">Todas / sin especificar</option>' +
     teamCats(tm).map(c => '<option value="' + c.id + '"' + (pz.categoria === c.id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
 }
+/* Filtro "de qué equipo y categoría cargar jugadores" (solo para buscar;
+   los participantes elegidos pueden ser de CUALQUIER equipo/categoría) */
+function pzRenderEqF(){
+  document.getElementById('pzEqF').innerHTML = S.teams.map(t =>
+    '<option value="' + t.id + '"' + (t.id === pz.teamId ? ' selected' : '') + '>' + esc(t.nombre) + '</option>').join('');
+}
+function pzRenderCatF(){
+  const tm = S.teams.find(x => x.id === document.getElementById('pzEqF').value);
+  document.getElementById('pzCatF').innerHTML = '<option value="">Todas las categorías</option>' +
+    teamCats(tm).map(c => '<option value="' + c.id + '">' + esc(c.nombre) + '</option>').join('');
+}
+function pzEqFChange(){ pzRenderCatF(); pzRenderPlayers(); }
 function pzRenderPlayers(){
-  const tm = S.teams.find(x => x.id === pz.teamId);
-  const catId = document.getElementById('pzCat').value;
-  const pls = teamPlayers(pz.teamId).filter(p => {
+  const eqId = document.getElementById('pzEqF').value || pz.teamId;
+  const tm = S.teams.find(x => x.id === eqId);
+  const catId = document.getElementById('pzCatF').value;
+  const pls = S.players.filter(p => {
     if (pz.jugadores.includes(p.id)) return true;   // los ya elegidos no se ocultan
+    if (p.teamId !== eqId) return false;
     if (!catId) return true;
     const c = playerCat(tm, p);
     return !!c && c.id === catId;
@@ -3956,12 +3981,42 @@ function pzRenderPlayers(){
   document.getElementById('pzPlayers').innerHTML = pls.length ? pls.map(p =>
     '<button class="chip' + (pz.jugadores.includes(p.id) ? ' on' : '') + '" onclick="pzTogglePlayer(\'' + p.id + '\')">' +
     esc(p.nombre + ' ' + (p.apellido || '')).trim() + '</button>').join('')
-    : '<p class="hint">No hay jugadores' + (catId ? ' en esa categoría' : ' cargados en el equipo') + '.</p>';
+    : '<p class="hint">No hay jugadores' + (catId ? ' en esa categoría' : ' en ese equipo') + '.</p>';
 }
 function pzTogglePlayer(id){
   const ix = pz.jugadores.indexOf(id);
   if (ix >= 0) pz.jugadores.splice(ix, 1); else pz.jugadores.push(id);
   pzRenderPlayers();
+}
+// Pone en la cancha (como rojos o azules) los participantes que faltan
+function pzPlayersToBoard(kind){
+  const b = pz.board;
+  const nuevos = pz.jugadores.filter(pid => !b.tokens.some(t => t.pid === pid));
+  if (!nuevos.length){
+    toast(pz.jugadores.length ? 'Todos los participantes ya están en la cancha' : 'Primero elegí jugadores tocando sus nombres', true);
+    return;
+  }
+  let num = b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0);
+  nuevos.forEach((pid, i) => {
+    const p = S.players.find(x => x.id === pid);
+    num++;
+    const tk = { id:uid(), kind, num, pid, label: p ? p.nombre : '',
+                 x: 10 + (i % 5) * 12,
+                 y: kind === 'A' ? 32 + Math.floor(i / 5) * 9 : 73 - Math.floor(i / 5) * 9 };
+    b.tokens.push(tk);
+    b.frames.forEach(f => { f.pos[tk.id] = { x:tk.x, y:tk.y }; });
+  });
+  pzSel = null;
+  pzRenderTools(); pzRenderBoard();
+  toast(nuevos.length + ' jugador' + (nuevos.length === 1 ? '' : 'es') + ' a la cancha (con su nombre)');
+}
+async function pzTokLabel(){
+  const tk = (pzSel && pzSel.type === 'tok') ? pz.board.tokens.find(t => t.id === pzSel.id) : null;
+  if (!tk) return;
+  const v = await appPromptText('Nombre en la ficha', 'Se muestra debajo de la ficha (dejalo vacío para que quede solo el número):', tk.label || '');
+  if (v === null) return;
+  tk.label = v;
+  pzRenderBoard();
 }
 
 /* --- dosificación / planificación --- */
@@ -4000,6 +4055,7 @@ function pzRenderTools(){
           '<button class="chip" onclick="pzAddZone(\'tri\')">➕ △ zona</button>' +
           '<button class="chip on" onclick="pzToggleView()">' + (pz.board.view === 'chips' ? '🏃 Ver figuras' : '⬤ Ver chapitas') + '</button>';
   if (selZone) h += '<button class="chip" onclick="pzZoneColor()">🎨 Color</button>';
+  if (selTok) h += '<button class="chip" onclick="pzTokLabel()">🏷 Nombre</button>';
   if (selTok || selZone) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelSel()">🗑 Borrar</button>';
   document.getElementById('pzTools').innerHTML = h;
 }
@@ -4074,6 +4130,11 @@ function pzZoneMarkup(z, sel){
   }
   return h;
 }
+function pzTokShortLabel(tk){
+  let s = String(tk.label || '').trim();
+  if (s.length > 10) s = s.slice(0, 9) + '…';
+  return s;
+}
 function pzTokMarkup(tk, view, sel){
   const col = PZ_TEAM_COLORS[tk.kind];
   let inner;
@@ -4089,7 +4150,9 @@ function pzTokMarkup(tk, view, sel){
             '<text y=".1" font-size="2.7" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
   }
   const ring = sel ? '<circle r="4.2" fill="none" stroke="#fff" stroke-width=".35" stroke-dasharray="1 .8"/>' : '';
-  return '<g data-pz="tok:' + tk.id + '" transform="translate(' + tk.x + ' ' + tk.y + ')">' + ring + inner + '</g>';
+  const lbl = pzTokShortLabel(tk);
+  const name = lbl ? '<text y="5.6" font-size="2" font-weight="700" fill="#fff" stroke="#0f172a" stroke-width=".3" paint-order="stroke" text-anchor="middle">' + esc(lbl) + '</text>' : '';
+  return '<g data-pz="tok:' + tk.id + '" transform="translate(' + tk.x + ' ' + tk.y + ')">' + ring + inner + name + '</g>';
 }
 function pzRenderBoard(){
   const svg = document.getElementById('pzSvg');
@@ -4240,6 +4303,12 @@ function pzCanvasDraw(ctx, W, pos){
       ctx.beginPath(); ctx.arc(0, 0, 2.9, 0, 7); ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill();
       ctx.lineWidth = .35; ctx.strokeStyle = '#f8fafc'; ctx.stroke();
       ctx.font = '800 2.7px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(String(t.num), 0, .1);
+    }
+    const lbl = pzTokShortLabel(t);
+    if (lbl){
+      ctx.font = '700 2px sans-serif';
+      ctx.lineWidth = .3; ctx.strokeStyle = '#0f172a'; ctx.strokeText(lbl, 0, 5.6);
+      ctx.fillStyle = '#fff'; ctx.fillText(lbl, 0, 5.6);
     }
     ctx.restore();
   });
