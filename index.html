@@ -724,7 +724,8 @@ const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', 
 const ROLES = {
   arquero: [],
   defensor: [['central','Central'],['lateral','Lateral']],
-  medio: [['recuperacion','De recuperación'],['creacion','De creación'],['derecha','Por derecha'],['izquierda','Por izquierda']],
+  medio: [['recuperacion','De recuperación'],['recuperacion_der','De recuperación por derecha'],['recuperacion_izq','De recuperación por izquierda'],
+          ['creacion','De creación'],['creacion_der','De creación por derecha'],['creacion_izq','De creación por izquierda']],
   atacante: [['centroatacante','Centroatacante'],['extremo','Extremo']]
 };
 
@@ -797,15 +798,20 @@ function catOf(pl){
   if (!pl.nacimiento) return null;
   return String(pl.nacimiento).split('-')[0] || null;
 }
+/* Claves de rol viejas (medio simple por lado) para no perder datos previos. */
+const LEGACY_ROLES = { derecha:'por derecha', izquierda:'por izquierda' };
+function rolLabel(l, rol){
+  if (!rol) return '';
+  const rr = (ROLES[l] || []).find(r => r[0] === rol);
+  if (rr) return rr[1].toLowerCase();
+  return LEGACY_ROLES[rol] || '';
+}
 function posLabel(pl){
   const l = pl.posicion && pl.posicion.linea;
   if (!l) return null;
   let t = LINEAS[l] || l;
-  const rol = pl.posicion.rol;
-  if (rol){
-    const rr = (ROLES[l] || []).find(r => r[0] === rol);
-    if (rr) t += ' ' + rr[1].toLowerCase();
-  }
+  const rl = rolLabel(l, pl.posicion.rol);
+  if (rl) t += ' ' + rl;
   return t;
 }
 /* Todas las posiciones posibles como [clave, etiqueta]. Clave: 'linea' o 'linea:rol'. */
@@ -823,7 +829,8 @@ function posKeyLabel(key){
   const p = String(key).split(':');
   const l = p[0], rol = p[1];
   let t = LINEAS[l] || l;
-  if (rol){ const rr = (ROLES[l] || []).find(r => r[0] === rol); if (rr) t += ' ' + rr[1].toLowerCase(); }
+  const rl = rolLabel(l, rol);
+  if (rl) t += ' ' + rl;
   return t;
 }
 function lastOf(arr){ return (arr && arr.length) ? arr[arr.length-1] : null; }

@@ -96,8 +96,9 @@ player = {
   fisico: { peso: [{fecha, kg}], altura: [{fecha, cm}] },  // con historial
   antecedentes: { aniosPractica, otrosDeportes: [texto] },
   posicion: { linea: 'arquero'|'defensor'|'medio'|'atacante',
-              rol:   'central'|'lateral'|'recuperacion'|'creacion'|
-                     'derecha'|'izquierda'|'centroatacante'|'extremo'|null,
+              rol:   'central'|'lateral'|'centroatacante'|'extremo'|
+                     'recuperacion'|'recuperacion_der'|'recuperacion_izq'|
+                     'creacion'|'creacion_der'|'creacion_izq'|null,
               otros: ['linea:rol', …],      // versatilidad (multiposición)
               preferida: 'linea:rol'|'' },  // donde se siente más cómodo
   historialEquipos: [{teamId, desde, hasta}],          // se llena al mover
