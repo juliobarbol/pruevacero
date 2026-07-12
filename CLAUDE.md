@@ -76,6 +76,7 @@ grep -n "===== js/" index.html
 | `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
 | `js/board.js` | pestaña 📋 Pizarra: ejercicios de entrenamiento en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota) y zonas arrastrables por pointer events, vista chapitas/figuras, ficha del ejercicio (materiales, participantes, dosificación, periodización); animación por pasos (`board.frames`, `pzTick`/`pzPlay`) y video WebM (`pzCanvasDraw` + MediaRecorder). ⚠️ rAF casi no corre bajo `--virtual-time-budget`: en tests llamar `pzTick(t)` a mano |
+| `js/sessions.js` | Sesiones de entrenamiento (`S.trainSessions`, vista "🗓 Sesiones" del toggle en Pizarra, funciones `ses*`): bloques cal/ppal/vc con ejercicios de la pizarra o actividades libres, minutos con default en `carga.dur`, total derivado (`sesTotalMin`), duplicar, "sesión de hoy" en Clases |
 | `js/backup.js` | backup JSON completo (incluye fotos) |
 | `js/export.js` | Excel con autofiltro (jugadores / estadísticas / jornada) |
 | `js/stats.js` | agregados (`aggFor`), tabla comparativa, resúmenes de ficha |
