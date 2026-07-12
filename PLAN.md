@@ -220,8 +220,8 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 10 | Informe PDF del jugador (ficha + foto + pruebas + radar + estadísticas + asistencia + lesiones + objetivos, jsPDF por CDN) | HECHA (2026-07-07) |
 | 11 | **Menú de posiciones ampliado**: medio suma "por derecha" y "por izquierda"; **Otros puestos** (multiposición, checkboxes) y **Posición preferida** (donde se siente cómodo) en la ficha/form y en el Excel | HECHA (2026-07-10) |
 | 12 | **Pizarra táctica — base** (pestaña 📋 Pizarra, pedido 2026-07-12): cancha SVG con dos equipos + pelota arrastrables, vista chapitas/figuras, zonas sombreadas (cuadrado/rectángulo/círculo/triángulo, movibles y con tamaño/color editables) y ficha del ejercicio: nombre, descripción, materiales, categoría + jugadores participantes, dosificación (duración, series, reps, pasada, descanso, intensidad, densidad derivada) y planificación (día, microciclo, etapa acumulación/transformación/realización) | HECHA (2026-07-12) |
-| 13 | **Pizarra táctica — animación**: pasos clave (fotogramas) + Play con movimiento suave para ver la secuencia del ejercicio | PENDIENTE |
-| 14 | **Pizarra táctica — exportar video** (WebM con MediaRecorder) + pulido (duplicar ejercicio, vínculo con el calendario de clases) | PENDIENTE |
+| 13 | **Pizarra táctica — animación**: pasos clave (fotogramas en `board.frames`, migración automática de ejercicios viejos) + ▶ Play con movimiento suave (interpolación con easing, rAF) | HECHA (2026-07-12) |
+| 14 | **Pizarra táctica — video y pulido**: 🎥 exportar la animación como video WebM (canvas + `captureStream` + `MediaRecorder`, dibuja la misma escena en canvas), ⧉ duplicar ejercicio, y tarjeta "Ejercicios planificados para hoy" en la pestaña Clases (por día de la semana del ejercicio) | HECHA (2026-07-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
@@ -236,14 +236,27 @@ conos, animaciones (videos de ejercicios), documentación del ejercicio
 densidad trabajo/descanso) y periodización (día de la semana, microciclo,
 etapa acumulación/transformación/realización).
 
-Acordado: se implementa TODO en vanilla (sin librerías de dibujo), en 3
-etapas: **12** pizarra base + ficha del ejercicio (HECHA), **13** animación
-por fotogramas clave con Play, **14** exportar video WebM (`MediaRecorder`,
-anda en Android/Chrome; en iPhone puede variar) + duplicar ejercicio. El
-módulo es `js/board.js` (funciones `pz*`/`ex*`), los ejercicios viven en
-`S.exercises` y entran al backup como el resto del estado. El shape de
-`board` ya queda preparado para la Etapa 13 (los `tokens/zones` de hoy son
-el "fotograma 0"; la animación agregará una lista de frames con posiciones).
+Acordado: se implementó TODO en vanilla (sin librerías de dibujo), en 3
+etapas: **12** pizarra base + ficha del ejercicio, **13** animación por
+fotogramas clave con Play, **14** exportar video WebM + duplicar + tarjeta
+"ejercicios de hoy" en Clases. **Las 3 HECHAS el 2026-07-12.** El módulo es
+`js/board.js` (funciones `pz*`/`ex*`), los ejercicios viven en `S.exercises`
+y entran al backup como el resto del estado.
+
+Detalles técnicos de la animación/video (Etapas 13-14):
+- `board.frames = [{ pos: { [tokenId]: {x, y} } }]`; el paso seleccionado
+  (`pzFrame`) es la verdad y los `tokens.x/y` lo espejan (`pzStorePos` /
+  `pzLoadPos`). Las zonas NO se animan (quedan fijas). Ejercicios de la
+  Etapa 12 sin `frames` se migran solos al abrirlos (su posición = paso 1).
+- Play: interpolación entre pasos con easing suavizado (`pzEase`,
+  1,2 s por transición, `PZ_SEG_MS`) actualizando `transform` de los `<g>`
+  por rAF; mientras reproduce se bloquea el arrastre y la edición de pasos.
+- Video: `pzCanvasDraw` redibuja la MISMA escena en un canvas (544×840),
+  `canvas.captureStream(30)` + `MediaRecorder` → descarga `.webm`. Con un
+  solo paso avisa que faltan pasos; si el navegador no soporta
+  MediaRecorder (iOS viejos) avisa con toast. OJO tests: rAF casi no corre
+  bajo `--virtual-time-budget` → en los tests el reloj del Play se maneja
+  llamando `pzTick(t)` a mano.
 
 ### Pedidos de Julio del 2026-07-06 (detalle para las etapas 6 y 7)
 

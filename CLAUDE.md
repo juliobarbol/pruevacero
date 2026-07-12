@@ -75,7 +75,7 @@ grep -n "===== js/" index.html
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
 | `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
-| `js/board.js` | pestaña 📋 Pizarra: ejercicios de entrenamiento en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota) y zonas arrastrables por pointer events, vista chapitas/figuras, ficha del ejercicio (materiales, participantes, dosificación, periodización) |
+| `js/board.js` | pestaña 📋 Pizarra: ejercicios de entrenamiento en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota) y zonas arrastrables por pointer events, vista chapitas/figuras, ficha del ejercicio (materiales, participantes, dosificación, periodización); animación por pasos (`board.frames`, `pzTick`/`pzPlay`) y video WebM (`pzCanvasDraw` + MediaRecorder). ⚠️ rAF casi no corre bajo `--virtual-time-budget`: en tests llamar `pzTick(t)` a mano |
 | `js/backup.js` | backup JSON completo (incluye fotos) |
 | `js/export.js` | Excel con autofiltro (jugadores / estadísticas / jornada) |
 | `js/stats.js` | agregados (`aggFor`), tabla comparativa, resúmenes de ficha |
@@ -140,14 +140,10 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 ## PENDIENTE (próximas sesiones)
 
 Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-12 están HECHAS
-las etapas 0–12 (incluye crono, grupos de rendimiento, Config al header,
-bug del lápiz, PWA instalable y la **pizarra táctica base**). Falta:
-
-1. **Etapa 13 — Pizarra: animación**: pasos clave (fotogramas) + Play con
-   movimiento suave. El `board` del ejercicio ya está pensado como
-   "fotograma 0" (ver sección Pizarra táctica de `PLAN.md`).
-2. **Etapa 14 — Pizarra: exportar video** WebM con `MediaRecorder` +
-   duplicar ejercicio + vínculo con el calendario de clases.
+**todas las etapas (0–14)**: incluye crono, grupos de rendimiento, Config al
+header, bug del lápiz, PWA instalable y la **pizarra táctica completa**
+(base + animación por pasos + video WebM + duplicar + "ejercicios de hoy"
+en Clases). No hay pedidos de Julio pendientes.
 
 Ideas menores / oportunidades (ninguna pedida por Julio todavía):
 
