@@ -151,6 +151,21 @@ evaluation = {                 // shape REAL implementado en Etapa 8
   id, teamId, playerId, fecha,
   scores: { [aspectId]: 1-10 }
 }
+exercise = {                   // ejercicio de la pizarra táctica (Etapa 12)
+  id, teamId, creado, nombre, descripcion, materiales,
+  categoria: catId|null,       // categoría a la que apunta el ejercicio
+  jugadores: [playerId, ...],  // participantes
+  carga: { dur, series, reps, pasada, descanso, intensidad },
+  // dur en min; pasada/descanso en seg; la DENSIDAD (trabajo:descanso) se
+  // deriva de pasada/descanso, no se guarda. intensidad: baja|media|alta|maxima
+  plan: { dia (0-6|null), micro, etapa },  // etapa: acumulacion|transformacion|realizacion
+  board: {                     // lo dibujado en la cancha (viewBox 68×105)
+    view: 'chips'|'figs',      // chapitas o figuras de jugador
+    tokens: [{ id, kind:'A'|'B'|'ball', num, x, y }],
+    zones:  [{ id, shape:'rect'|'circle'|'tri', x, y, w, h, color }]
+  }
+}
+
 evalAspects = [{ id, nombre, archivada? }]   // aspectos configurables
 // (9 precargados: pase, control, gambeta, definición, cabezazo, velocidad,
 // visión, marca, actitud). Radar en canvas propio (drawRadar, sin librerías)
@@ -181,7 +196,11 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
   5. **📊 Estadísticas** — por jugador y por equipo: partidos y minutos,
      goles/asistencias (total y por partido), tarjetas y faltas por partido
      (ej. "una amarilla cada 3 partidos"), tabla comparativa ordenable.
-  6. **⚙️ Config** — equipos, backup JSON, exportes, tema.
+  6. **📋 Pizarra** — pizarra táctica para planificar ejercicios de
+     entrenamiento: cancha con dos equipos + pelota (arrastrables), zonas
+     sombreadas, vista chapitas/figuras, y ficha completa del ejercicio
+     (descripción, materiales, participantes, dosificación, periodización).
+  7. **⚙️ Config** — equipos, backup JSON, exportes, tema (botón en header).
 
 ## Etapas de implementación
 
@@ -200,8 +219,31 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 9 | Historial de lesiones + objetivos por jugador (en la ficha: alta/borrar lesiones con fecha/tipo/días/notas; objetivos con cumplido/pendiente) | HECHA (2026-07-07) |
 | 10 | Informe PDF del jugador (ficha + foto + pruebas + radar + estadísticas + asistencia + lesiones + objetivos, jsPDF por CDN) | HECHA (2026-07-07) |
 | 11 | **Menú de posiciones ampliado**: medio suma "por derecha" y "por izquierda"; **Otros puestos** (multiposición, checkboxes) y **Posición preferida** (donde se siente cómodo) en la ficha/form y en el Excel | HECHA (2026-07-10) |
+| 12 | **Pizarra táctica — base** (pestaña 📋 Pizarra, pedido 2026-07-12): cancha SVG con dos equipos + pelota arrastrables, vista chapitas/figuras, zonas sombreadas (cuadrado/rectángulo/círculo/triángulo, movibles y con tamaño/color editables) y ficha del ejercicio: nombre, descripción, materiales, categoría + jugadores participantes, dosificación (duración, series, reps, pasada, descanso, intensidad, densidad derivada) y planificación (día, microciclo, etapa acumulación/transformación/realización) | HECHA (2026-07-12) |
+| 13 | **Pizarra táctica — animación**: pasos clave (fotogramas) + Play con movimiento suave para ver la secuencia del ejercicio | PENDIENTE |
+| 14 | **Pizarra táctica — exportar video** (WebM con MediaRecorder) + pulido (duplicar ejercicio, vínculo con el calendario de clases) | PENDIENTE |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
+
+### Pizarra táctica (pedido de Julio 2026-07-12, plan en 3 tandas)
+
+Julio pidió una pizarra táctica animada para planificar entrenamientos, con:
+dos equipos + pelota, vista figuras/chapitas, zonas sombreadas automáticas
+(cuadrado/rectángulo/triángulo/círculo) para espacios reducidos sin dibujar
+conos, animaciones (videos de ejercicios), documentación del ejercicio
+(nombre, descripción, materiales, participantes + categoría), dosificación
+(duración total, series y repeticiones, tiempo de pasadas, intensidad,
+densidad trabajo/descanso) y periodización (día de la semana, microciclo,
+etapa acumulación/transformación/realización).
+
+Acordado: se implementa TODO en vanilla (sin librerías de dibujo), en 3
+etapas: **12** pizarra base + ficha del ejercicio (HECHA), **13** animación
+por fotogramas clave con Play, **14** exportar video WebM (`MediaRecorder`,
+anda en Android/Chrome; en iPhone puede variar) + duplicar ejercicio. El
+módulo es `js/board.js` (funciones `pz*`/`ex*`), los ejercicios viven en
+`S.exercises` y entran al backup como el resto del estado. El shape de
+`board` ya queda preparado para la Etapa 13 (los `tokens/zones` de hoy son
+el "fotograma 0"; la animación agregará una lista de frames con posiciones).
 
 ### Pedidos de Julio del 2026-07-06 (detalle para las etapas 6 y 7)
 
