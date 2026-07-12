@@ -97,7 +97,9 @@ player = {
   antecedentes: { aniosPractica, otrosDeportes: [texto] },
   posicion: { linea: 'arquero'|'defensor'|'medio'|'atacante',
               rol:   'central'|'lateral'|'recuperacion'|'creacion'|
-                     'centroatacante'|'extremo'|null },
+                     'derecha'|'izquierda'|'centroatacante'|'extremo'|null,
+              otros: ['linea:rol', …],      // versatilidad (multiposición)
+              preferida: 'linea:rol'|'' },  // donde se siente más cómodo
   historialEquipos: [{teamId, desde, hasta}],          // se llena al mover
   lesiones: [{fecha, tipo, diasBaja, notas}],          // etapa 7
   objetivos: [{texto, creado, cumplido?}],             // etapa 7
@@ -196,6 +198,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | ⏱ | **Cronómetro grupal** (pestaña ⏱ Crono, pedido 2026-07-07): participantes por categoría/manual, largada 3·2·1 con beep/vibración, play/stop individual, vueltas + meta de vueltas, orden de llegada, comparación vs historial, deshacer, Wake Lock; guarda solo en la jornada de HOY (campo `vueltas` en testSession) | HECHA (2026-07-07) |
 | 9 | Historial de lesiones + objetivos por jugador (en la ficha: alta/borrar lesiones con fecha/tipo/días/notas; objetivos con cumplido/pendiente) | HECHA (2026-07-07) |
 | 10 | Informe PDF del jugador (ficha + foto + pruebas + radar + estadísticas + asistencia + lesiones + objetivos, jsPDF por CDN) | HECHA (2026-07-07) |
+| 11 | **Menú de posiciones ampliado**: medio suma "por derecha" y "por izquierda"; **Otros puestos** (multiposición, checkboxes) y **Posición preferida** (donde se siente cómodo) en la ficha/form y en el Excel | HECHA (2026-07-10) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 

@@ -161,6 +161,9 @@ html[data-theme="light"] .btn{color:#fff}
 .ov-head h2{flex:1;font-size:18px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
 .form-grid .full{grid-column:1/-1}
+.chkgrid{display:flex;flex-wrap:wrap;gap:6px 10px;margin:2px 0 6px}
+.chkgrid label{display:inline-flex;align-items:center;gap:5px;font-weight:400;font-size:.9rem;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;margin:0}
+.chkgrid input{width:auto;margin:0}
 
 /* ============================ FICHA ============================ */
 .ficha-hero{display:flex;align-items:center;gap:14px;margin-bottom:14px}
@@ -459,6 +462,10 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
         <option value="atacante">Atacante</option>
       </select></div>
     <div><label>Puesto</label><select id="pfRol"><option value="">—</option></select></div>
+    <div class="full"><label>Otros puestos (versatilidad)</label>
+      <div id="pfOtrosPuestos" class="chkgrid"></div></div>
+    <div class="full"><label>Posición preferida (donde se siente más cómodo)</label>
+      <select id="pfPreferida"><option value="">—</option></select></div>
     <div class="full"><label>Notas</label><textarea id="pfNotas" rows="3"></textarea></div>
   </div>
   <div class="btn-row">
@@ -717,7 +724,7 @@ const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', 
 const ROLES = {
   arquero: [],
   defensor: [['central','Central'],['lateral','Lateral']],
-  medio: [['recuperacion','De recuperación'],['creacion','De creación']],
+  medio: [['recuperacion','De recuperación'],['creacion','De creación'],['derecha','Por derecha'],['izquierda','Por izquierda']],
   atacante: [['centroatacante','Centroatacante'],['extremo','Extremo']]
 };
 
@@ -731,6 +738,11 @@ function loadData(){
       const d = JSON.parse(raw);
       if (d && Array.isArray(d.teams)) {
         d.players      = d.players      || [];
+        d.players.forEach(p => {
+          p.posicion = p.posicion || { linea:'', rol:'' };
+          if (!Array.isArray(p.posicion.otros)) p.posicion.otros = [];
+          if (p.posicion.preferida == null) p.posicion.preferida = '';
+        });
         d.testDefs     = d.testDefs     || DEF_TESTDEFS.slice();
         d.testSessions = d.testSessions || [];
         d.matches      = d.matches      || [];
@@ -794,6 +806,24 @@ function posLabel(pl){
     const rr = (ROLES[l] || []).find(r => r[0] === rol);
     if (rr) t += ' ' + rr[1].toLowerCase();
   }
+  return t;
+}
+/* Todas las posiciones posibles como [clave, etiqueta]. Clave: 'linea' o 'linea:rol'. */
+function allPosOptions(){
+  const out = [];
+  for (const l in LINEAS){
+    const roles = ROLES[l] || [];
+    if (!roles.length) out.push([l, LINEAS[l]]);
+    else roles.forEach(r => out.push([l + ':' + r[0], LINEAS[l] + ' ' + r[1].toLowerCase()]));
+  }
+  return out;
+}
+function posKeyLabel(key){
+  if (!key) return '';
+  const p = String(key).split(':');
+  const l = p[0], rol = p[1];
+  let t = LINEAS[l] || l;
+  if (rol){ const rr = (ROLES[l] || []).find(r => r[0] === rol); if (rr) t += ' ' + rr[1].toLowerCase(); }
   return t;
 }
 function lastOf(arr){ return (arr && arr.length) ? arr[arr.length-1] : null; }
@@ -1294,6 +1324,16 @@ function pfLineaChange(){
   sel.innerHTML = '<option value="">—</option>' + roles.map(r => '<option value="' + r[0] + '">' + r[1] + '</option>').join('');
   sel.disabled = !roles.length;
 }
+function renderPosPickers(p){
+  const otros = (p && p.posicion && Array.isArray(p.posicion.otros)) ? p.posicion.otros : [];
+  const pref  = p && p.posicion ? (p.posicion.preferida || '') : '';
+  const opts  = allPosOptions();
+  document.getElementById('pfOtrosPuestos').innerHTML = opts.map(o =>
+    '<label><input type="checkbox" value="' + esc(o[0]) + '"' + (otros.indexOf(o[0]) >= 0 ? ' checked' : '') + '> ' + esc(o[1]) + '</label>'
+  ).join('');
+  document.getElementById('pfPreferida').innerHTML = '<option value="">—</option>' +
+    opts.map(o => '<option value="' + esc(o[0]) + '"' + (o[0] === pref ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('');
+}
 function openPlayerForm(id){
   const t = activeTeam();
   if (!t){ toast('Primero creá un equipo', true); return; }
@@ -1316,6 +1356,7 @@ function openPlayerForm(id){
   document.getElementById('pfLinea').value = p ? (p.posicion.linea || '') : '';
   pfLineaChange();
   document.getElementById('pfRol').value = p ? (p.posicion.rol || '') : '';
+  renderPosPickers(p);
   document.getElementById('pfNotas').value = p ? (p.notas || '') : '';
   openOverlay('ovPlayerForm');
 }
@@ -1333,7 +1374,7 @@ function savePlayer(){
       lateralidad:{ pie:'', mano:'', ojo:'' },
       fisico:{ peso:[], altura:[] },
       antecedentes:{ aniosPractica:null, otrosDeportes:'' },
-      posicion:{ linea:'', rol:'' },
+      posicion:{ linea:'', rol:'', otros:[], preferida:'' },
       historialEquipos:[{ teamId:t.id, desde:todayISO(), hasta:null }],
       lesiones:[], objetivos:[], notas:'', creado:todayISO()
     };
@@ -1352,6 +1393,9 @@ function savePlayer(){
   const linea = document.getElementById('pfLinea').value;
   p.posicion.linea = linea;
   p.posicion.rol = linea ? document.getElementById('pfRol').value : '';
+  p.posicion.otros = Array.prototype.slice.call(
+    document.querySelectorAll('#pfOtrosPuestos input:checked')).map(c => c.value);
+  p.posicion.preferida = document.getElementById('pfPreferida').value;
   p.notas = document.getElementById('pfNotas').value.trim();
 
   // Peso / altura: si cambió el valor, se agrega una medición con fecha de hoy
@@ -1404,6 +1448,10 @@ function openFicha(id){
     '<div class="card"><h3>📋 Datos</h3><div class="datagrid">' +
       dgi('Nacimiento', esc(fmtFecha(p.nacimiento))) +
       dgi('Posición', esc(posLabel(p) || '')) +
+      ((p.posicion.otros && p.posicion.otros.length) ?
+        dgi('Otros puestos', esc(p.posicion.otros.map(posKeyLabel).join(', '))) : '') +
+      (p.posicion.preferida ?
+        dgi('Posición preferida', esc(posKeyLabel(p.posicion.preferida))) : '') +
     '</div></div>' +
 
     '<div class="card"><h3>🦶 Lateralidad</h3><div class="datagrid tri">' +
@@ -1537,6 +1585,8 @@ function importPlayerFile(ev){
       p.lateralidad = p.lateralidad || { pie:'', mano:'', ojo:'' };
       p.antecedentes = p.antecedentes || { aniosPractica:null, otrosDeportes:'' };
       p.posicion = p.posicion || { linea:'', rol:'' };
+      p.posicion.otros = Array.isArray(p.posicion.otros) ? p.posicion.otros : [];
+      p.posicion.preferida = p.posicion.preferida || '';
       p.fotoId = j.photo ? savePhoto(j.photo) : null;   // la foto viaja en el archivo
       S.players.push(p);
       saveData();
@@ -3631,7 +3681,7 @@ function _slug(s){
   return String(s || '').trim().replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ]+/g, '-').replace(/^-+|-+$/g, '') || 'equipo';
 }
 function aoaJugadores(t){
-  const head = ['Apellido','Nombre','Nacimiento','Categoría','Edad','En el club desde','Posición','Pie','Mano','Ojo',
+  const head = ['Apellido','Nombre','Nacimiento','Categoría','Edad','En el club desde','Posición','Otros puestos','Posición preferida','Pie','Mano','Ojo',
                 'Peso (kg)','Altura (cm)','Años de fútbol','Otros deportes','Notas'];
   const rows = teamPlayers(t.id)
     .sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'))
@@ -3641,6 +3691,8 @@ function aoaJugadores(t){
       return [
         p.apellido || '', p.nombre, p.nacimiento ? fmtFecha(p.nacimiento) : '', catOf(p) || '',
         e != null ? e : '', p.desdeTemporada || '', posLabel(p) || '',
+        (p.posicion.otros || []).map(posKeyLabel).join(', '),
+        p.posicion.preferida ? posKeyLabel(p.posicion.preferida) : '',
         p.lateralidad.pie || '', p.lateralidad.mano || '', p.lateralidad.ojo || '',
         lp ? lp.kg : '', la ? la.cm : '',
         p.antecedentes.aniosPractica != null ? p.antecedentes.aniosPractica : '',
@@ -4177,6 +4229,11 @@ function importBackupFile(ev){
       if (j.photos) Object.keys(j.photos).forEach(id => savePhoto(j.photos[id], id));
       S = j.data;
       S.players = S.players || [];
+      S.players.forEach(p => {
+        p.posicion = p.posicion || { linea:'', rol:'' };
+        if (!Array.isArray(p.posicion.otros)) p.posicion.otros = [];
+        if (p.posicion.preferida == null) p.posicion.preferida = '';
+      });
       S.testDefs = S.testDefs || DEF_TESTDEFS.slice();
       S.testSessions = S.testSessions || [];
       S.matches = S.matches || [];
