@@ -3386,6 +3386,40 @@ function renderClases(){
       }).join('') +
       '<p class="hint" style="margin-top:8px">El % no cuenta los días lesionado. Sirve de referencia para decidir titularidades.</p></div>';
   }
+
+  // ── Carga de entrenamiento (RPE × minutos), semana actual vs promedio de 4 ──
+  const sheetsRpe = S.attendance.filter(a => a.teamId === t.id && (a.catId || null) === (claseCat || null) &&
+    a.rpe && Object.keys(a.rpe).length);
+  if (sheetsRpe.length){
+    const lunes = isoShift(hoy, -((dowOf(hoy) + 6) % 7));
+    const cargaRange = (pid, desde, hasta) =>
+      sheetsRpe.filter(a => a.fecha >= desde && a.fecha <= hasta).reduce((m, a) => m + cargaDe(a, pid), 0);
+    const cRows = roster.map(p => {
+      const act = cargaRange(p.id, lunes, isoShift(lunes, 6));
+      let tot = 0, nsem = 0;
+      for (let k = 1; k <= 4; k++){
+        const l2 = isoShift(lunes, -7 * k);
+        const c = cargaRange(p.id, l2, isoShift(l2, 6));
+        if (c > 0){ tot += c; nsem++; }
+      }
+      const prom = nsem ? Math.round(tot / nsem) : 0;
+      return { p: p, act: act, prom: prom };
+    }).filter(r => r.act || r.prom);
+    if (cRows.length){
+      html += '<div class="card"><h3>📈 Carga de entrenamiento (RPE)</h3>' +
+        cRows.map(r => {
+          const alta = r.prom > 0 && r.act > 1.5 * r.prom;
+          return '<div class="mp-row"><div class="nm">' + esc(r.p.nombre + ' ' + (r.p.apellido || '')) + '</div>' +
+            '<div class="mm">semana <b style="color:var(--text)">' + r.act + '</b>' +
+            (r.prom ? ' · prom. ' + r.prom : '') + '</div>' +
+            (alta ? '<span class="att-chip L" title="Más del 150% del promedio">⚠</span>' : '') +
+            '</div>';
+        }).join('') +
+        '<p class="hint" style="margin-top:8px">Carga = RPE (1-10, se carga al pasar lista) × minutos de la clase. ' +
+        '"Semana" es la carga de esta semana; "prom." el promedio semanal de las 4 anteriores. ' +
+        '⚠ = esta semana supera el promedio en más del 50% (ojo con sobrecargar).</p></div>';
+    }
+  }
   box.innerHTML = html;
 }
 
@@ -3425,7 +3459,10 @@ function renderAsis(){
     const m = (a.marks || {})[p.id];
     if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
   });
-  let html = '<p class="hint">Tocá a cada jugador para marcarlo: ✔ presente → ✘ ausente → 🤕 lesionado → sin marcar. Se guarda solo.</p>' +
+  let html = '<p class="hint">Tocá a cada jugador para marcarlo: ✔ presente → ✘ ausente → 🤕 lesionado → sin marcar. Se guarda solo. ' +
+    'A los presentes cargales el <b>RPE</b> (1 = muy suave … 10 = agotador): la app calcula la carga (RPE × minutos).</p>' +
+    '<div class="med-row" style="margin-top:8px"><div><label style="margin-top:0">Duración de la clase (min)</label>' +
+    '<input type="number" inputmode="numeric" min="0" value="' + (a.durMin != null ? a.durMin : '') + '" placeholder="90" onchange="asisSetDur(this.value)"></div></div>' +
     '<div class="btn-row"><button class="btn sec" onclick="attAllP()">✅ Marcar todos presentes</button></div>';
   if (!players.length){
     html += '<div class="empty">No hay jugadores' + (cat ? ' de esta categoría' : '') + ' en el equipo.</div>';
@@ -3436,8 +3473,17 @@ function renderAsis(){
                  : m === 'A' ? '<span class="att-chip A">✘ A</span>'
                  : m === 'L' ? '<span class="att-chip L">🤕 L</span>'
                  : '<span class="att-chip">—</span>';
-      return '<button class="mp-row" onclick="attCycle(\'' + p.id + '\')">' +
-        avatarHtml(p) + '<div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' + chip + '</button>';
+      const rpeVal = (a.rpe || {})[p.id] || '';
+      const rpeSel = m === 'P'
+        ? '<select style="width:70px;flex:none;padding:8px 4px;text-align:center" title="RPE (esfuerzo 1-10)" onchange="attSetRpe(\'' + p.id + '\', this.value)">' +
+            '<option value="">RPE</option>' +
+            [1,2,3,4,5,6,7,8,9,10].map(n => '<option value="' + n + '"' + (rpeVal === n ? ' selected' : '') + '>' + n + '</option>').join('') +
+          '</select>'
+        : '';
+      return '<div class="mp-row" style="gap:8px">' +
+        '<button style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;text-align:left" onclick="attCycle(\'' + p.id + '\')">' +
+          avatarHtml(p) + '<div class="nm">' + esc(p.nombre + ' ' + (p.apellido || '')) + '</div>' + chip + '</button>' +
+        rpeSel + '</div>';
     }).join('');
     html += '<p class="hint" style="text-align:center;margin-top:10px">✔ ' + P + ' presentes · ✘ ' + A + ' ausentes' + (L ? ' · 🤕 ' + L : '') +
       ' · sin marcar ' + (players.length - P - A - L) + '</p>';
@@ -3451,8 +3497,27 @@ function attCycle(pid){
   const cur = a.marks[pid] || '';
   const next = cur === '' ? 'P' : cur === 'P' ? 'A' : cur === 'A' ? 'L' : '';
   if (next === '') delete a.marks[pid]; else a.marks[pid] = next;
+  if (next !== 'P' && a.rpe) delete a.rpe[pid];   // el RPE es solo de presentes
   saveData();
   renderAsis();
+}
+function attSetRpe(pid, v){
+  const a = curAsis();
+  if (!a) return;
+  a.rpe = a.rpe || {};
+  if (v === '') delete a.rpe[pid]; else a.rpe[pid] = Number(v);
+  saveData();
+}
+function asisSetDur(v){
+  const a = curAsis();
+  if (!a) return;
+  a.durMin = (v === '' ? null : Math.max(0, Number(v) || 0));
+  saveData();
+}
+/* --- control de carga (RPE × minutos) --- */
+function cargaDe(a, pid){
+  const r = (a.rpe || {})[pid];
+  return r ? r * (a.durMin != null ? a.durMin : 90) : 0;
 }
 function attAllP(){
   const a = curAsis();
