@@ -746,6 +746,18 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   </div>
 </div>
 
+<!-- ══════════════ OVERLAY BIBLIOTECA DE EJERCICIOS ══════════════ -->
+<div class="overlay" id="ovLib">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovLib')">←</button>
+    <h2>Biblioteca de ejercicios</h2>
+  </div>
+  <p class="hint" style="margin-bottom:12px">Ejercicios clásicos de fútbol formativo,
+  ya dibujados. Tocá uno y se agrega a tu equipo listo para adaptar (mover fichas,
+  poner nombres, animarlo).</p>
+  <div id="libList"></div>
+</div>
+
 <!-- ══════════════ OVERLAY SESIÓN DE ENTRENAMIENTO ══════════════ -->
 <div class="overlay" id="ovSes">
   <div class="ov-head">
@@ -3847,7 +3859,9 @@ function renderPizarra(){
     return;
   }
   const exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
-  h += '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>';
+  h += '<div class="btn-row" style="margin-top:0">' +
+    '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>' +
+    '<button class="btn sec" onclick="openLib()">📚 Biblioteca</button></div>';
   if (!exs.length){
     h += '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
   } else {
@@ -4496,6 +4510,141 @@ function pzXY(e){
   svg.addEventListener('pointerup', pzUp);
   svg.addEventListener('pointercancel', pzUp);
 })();
+
+/* --- biblioteca de ejercicios precargados --- */
+// Formato compacto: n nombre · d descripción · m materiales · dur/se/re/pa/de/int carga
+// A/B fichas [x,y] · ball/balls pelotas · z zonas [forma,x,y,w,h,color]
+const PZ_LIB = [
+  { n:'Rondo 4 vs 2', d:'Los 4 de afuera mantienen la posesión a 1-2 toques por fuera del cuadrado; los 2 del medio intentan recuperar. El que pierde la pelota o la tira afuera pasa al medio.',
+    m:'Conos, pecheras, 1 pelota', dur:15, int:'media',
+    A:[[34,34],[20,48],[48,48],[34,62]], B:[[30,46],[38,50]], ball:[34,36],
+    z:[['rect',22,36,24,24,0]] },
+  { n:'Rondo 6 vs 2', d:'Igual que el rondo clásico pero con 6 afuera en círculo: más pases, menos presión. Ideal para entrar en calor tocando.',
+    m:'Conos, pecheras, 1 pelota', dur:10, int:'baja',
+    A:[[34,30],[19,38],[49,38],[19,60],[49,60],[34,68]], B:[[30,47],[38,51]], ball:[34,32],
+    z:[['circle',15,30,38,38,1]] },
+  { n:'Posesión 4 vs 4 + 2 comodines', d:'Posesión dentro del rectángulo. Los comodines (rojos 5 y 6, en los costados) juegan siempre con el equipo que tiene la pelota. Cambiar de rol cada 3 minutos.',
+    m:'Conos, pecheras de dos colores', dur:16, se:4, pa:180, de:60, int:'alta',
+    A:[[20,34],[46,34],[20,68],[46,68],[15,52],[53,52]], B:[[28,44],[40,44],[28,60],[40,60]], ball:[34,52],
+    z:[['rect',12,28,44,50,0]] },
+  { n:'Juego reducido 3 vs 3 con mini arcos', d:'3 contra 3 en espacio reducido con dos arcos chicos (zonas celestes). Gol solo dentro del área marcada. Trabaja duelos, apoyos y transiciones.',
+    m:'Conos, pecheras, 2 mini arcos', dur:15, se:3, pa:240, de:90, int:'alta',
+    A:[[24,40],[34,46],[44,40]], B:[[24,64],[34,58],[44,64]], ball:[34,52],
+    z:[['rect',16,32,36,42,0],['rect',30,29,8,4,1],['rect',30,71,8,4,1]] },
+  { n:'Pared y definición', d:'El rojo 1 juega la pared con el rojo 2 (de espaldas al arco), recibe dentro del área y define. Rotar puestos. Variante: definición a un toque.',
+    m:'Pelotas, arco', dur:14, se:3, re:6, int:'media',
+    A:[[30,27],[41,18]], B:[[34,6]], ball:[30,29] },
+  { n:'Ataque 2 vs 1 + arquero', d:'Los dos rojos atacan contra un defensor y el arquero. Buscar la superioridad: fijar al defensor y dar el pase al libre. Salida desde mitad de cancha.',
+    m:'Pelotas, pecheras, arco', dur:15, se:4, re:4, int:'alta',
+    A:[[26,32],[42,32]], B:[[34,20],[34,6]], ball:[26,34] },
+  { n:'Circuito de conducción (zigzag)', d:'Conducir la pelota en zigzag entre los conos (zonas amarillas) ida y vuelta. Trabajar con pierna hábil y no hábil. Fila detrás de la salida.',
+    m:'Conos, 1 pelota cada 2 jugadores', dur:12, se:4, re:2, pa:20, de:40, int:'media',
+    A:[[16,82],[24,86],[32,90]], ball:[16,79],
+    z:[['circle',18,20,4,4,0],['circle',26,32,4,4,0],['circle',18,44,4,4,0],['circle',26,56,4,4,0],['circle',18,68,4,4,0]] },
+  { n:'Rombo de pases', d:'Pase al siguiente vértice del rombo y correr al puesto al que se pasó. Primero a un sentido, después al otro. Sumar segunda pelota cuando sale fluido.',
+    m:'Conos, 1-2 pelotas', dur:12, int:'media',
+    A:[[34,28],[16,52],[52,52],[34,76]], ball:[34,30] },
+  { n:'Control y pase en parejas', d:'Parejas enfrentadas: control orientado y pase. Variantes: a un toque, con pierna no hábil, control con el pecho. Distancia según la edad.',
+    m:'1 pelota por pareja', dur:10, int:'baja',
+    A:[[24,40],[24,64],[44,40],[44,64]], balls:[[24,44],[44,44]] },
+  { n:'1 vs 1 al arco', d:'Duelo individual dentro del carril (zona celeste): el rojo ataca, el azul defiende, definición al arco con arquero. Cambio de roles en cada pasada.',
+    m:'Conos, pecheras, pelotas, arco', dur:14, se:4, re:3, pa:20, de:60, int:'maxima',
+    A:[[34,62]], B:[[34,40],[34,6]], ball:[34,65],
+    z:[['rect',22,18,24,52,1]] },
+  { n:'Ataque 3 vs 2 + arquero', d:'Tres atacantes contra dos defensores y arquero. Atacar rápido antes de que la defensa se acomode; buscar al hombre libre. Terminar SIEMPRE la jugada.',
+    m:'Pelotas, pecheras, arco', dur:16, se:4, re:4, int:'alta',
+    A:[[18,58],[34,64],[50,58]], B:[[26,32],[42,32],[34,6]], ball:[34,66] },
+  { n:'Defensa en franja (basculación)', d:'La línea azul de 4 defiende dentro de la franja (zona roja): basculan según el lado de la pelota que mueven los rojos. Trabajar achique y coberturas sin robar todavía.',
+    m:'Conos, pecheras', dur:12, int:'media',
+    A:[[14,66],[28,66],[40,66],[54,66]], B:[[14,48],[28,48],[40,48],[54,48]], ball:[28,68],
+    z:[['rect',4,40,60,16,2]] },
+  { n:'Transición 4 vs 2 → dos zonas', d:'Rondo 4 vs 2 en la zona izquierda; cuando los del medio recuperan, la pelota viaja a la otra zona y se arma el rondo allá. Trabaja transición y pase largo.',
+    m:'Conos, pecheras, 1 pelota', dur:16, int:'alta',
+    A:[[8,34],[30,34],[8,56],[30,56]], B:[[16,42],[22,48],[44,42],[54,48]], ball:[10,36],
+    z:[['rect',6,30,26,28,0],['rect',36,30,26,28,1]] },
+  { n:'Juego de posición 5 vs 5 + 3', d:'Posesión con comodines externos (los rojos de los bordes juegan con quien tiene la pelota). Objetivo: 10 pases seguidos = punto. Cambiar equipos por color.',
+    m:'Conos, pecheras de dos colores', dur:20, se:3, pa:300, de:90, int:'alta',
+    A:[[14,28],[54,28],[14,78],[54,78],[34,24]], B:[[24,40],[44,40],[34,52],[24,64],[44,64]], ball:[34,54],
+    z:[['rect',10,24,48,58,0]] },
+  { n:'Centros y definición', d:'El rojo de la banda conduce y tira el centro; los otros dos atacan el primer y segundo palo contra un defensor y el arquero. Alternar banda derecha e izquierda.',
+    m:'Pelotas, arco, conos', dur:16, se:4, re:5, int:'alta',
+    A:[[60,32],[28,20],[40,25]], B:[[34,22],[34,6]], ball:[62,34] },
+  { n:'Velocidad de reacción (carriles)', d:'Cada jugador en su carril: a la señal (visual o sonora), sprint hasta el final de la zona y trote de vuelta. Variar salidas: sentado, de espaldas, tras salto.',
+    m:'Conos', dur:10, se:4, re:6, pa:8, de:30, int:'maxima',
+    A:[[18,92],[34,92],[50,92]],
+    z:[['rect',12,58,12,30,0],['rect',28,58,12,30,1],['rect',44,58,12,30,2]] },
+  { n:'Coordinación (escalera de cuadrados)', d:'Pasar por los cuadrados con apoyos rápidos: 1 apoyo, 2 apoyos, lateral, salto a pies juntos. Terminar con una pasada de velocidad.',
+    m:'Escalera de coordinación o conos', dur:10, se:3, re:4, int:'media',
+    A:[[34,86],[34,94]],
+    z:[['rect',30,40,8,8,3],['rect',30,50,8,8,3],['rect',30,60,8,8,3],['rect',30,70,8,8,3]] },
+  { n:'Partido condicionado (2 toques)', d:'Partido en cancha completa con condición: máximo dos toques por intervención (adaptar según la edad). Fomenta el pase, el apoyo constante y levantar la cabeza.',
+    m:'Pecheras, 2 arcos', dur:25, int:'alta',
+    A:[[34,99],[14,80],[34,82],[54,80],[20,68],[48,68],[34,62]],
+    B:[[34,6],[14,25],[34,23],[54,25],[20,37],[48,37],[34,43]], ball:[34,52.5] },
+  { n:'Arqueros: remates y desvíos', d:'Tres jugadores rematan en orden desde fuera del área; el arquero ataja, se levanta y ya recibe el siguiente. Variar altura y palo. Rotar arquero si hay más de uno.',
+    m:'Pelotas (varias), arco', dur:12, se:3, re:8, int:'alta',
+    A:[[22,30],[34,32],[46,30]], B:[[34,7]], balls:[[22,32],[34,34],[46,32]] },
+  { n:'Vuelta a la calma en círculo', d:'Trote suave alrededor del círculo y después estiramientos guiados en el lugar: cuádriceps, isquios, gemelos, aductores. Charla corta de cierre de la clase.',
+    m:'Nada (opcional: colchonetas)', dur:8, int:'baja',
+    A:[[34,34],[20,44],[48,44],[20,61],[48,61],[34,71]],
+    z:[['circle',17,38,34,29,1]] }
+];
+function pzLibToExercise(tpl, teamId){
+  const toks = [];
+  (tpl.A || []).forEach((q, i) => toks.push({ id:uid(), kind:'A', num:i + 1, x:q[0], y:q[1] }));
+  (tpl.B || []).forEach((q, i) => toks.push({ id:uid(), kind:'B', num:i + 1, x:q[0], y:q[1] }));
+  (tpl.balls || (tpl.ball ? [tpl.ball] : [])).forEach(q => toks.push({ id:uid(), kind:'ball', num:0, x:q[0], y:q[1] }));
+  const zones = (tpl.z || []).map(z => ({ id:uid(), shape:z[0], x:z[1], y:z[2], w:z[3], h:z[4], color:z[5] || 0 }));
+  const pos = {};
+  toks.forEach(t => { pos[t.id] = { x:t.x, y:t.y }; });
+  return {
+    id:uid(), teamId, creado:todayISO(),
+    nombre:tpl.n, descripcion:tpl.d || '', materiales:tpl.m || '',
+    categoria:null, jugadores:[],
+    carga:{ dur:tpl.dur || null, series:tpl.se || null, reps:tpl.re || null,
+            pasada:tpl.pa || null, descanso:tpl.de || null, intensidad:tpl.int || '' },
+    plan:{ dia:null, micro:'', etapa:'' },
+    board:{ view:'chips', tokens:toks, zones:zones, frames:[{ pos:pos }] }
+  };
+}
+function pzLibPreviewSvg(tpl){
+  const e = pzLibToExercise(tpl, '_prev');
+  return '<svg viewBox="0 0 68 105" style="width:46px;height:71px;border-radius:6px;flex:none">' +
+    PZ_FIELD +
+    e.board.zones.map(z => pzZoneMarkup(z, false)).join('') +
+    e.board.tokens.map(t => pzTokMarkup(t, 'chips', false)).join('') +
+    '</svg>';
+}
+function openLib(){
+  const box = document.getElementById('libList');
+  box.innerHTML = PZ_LIB.map((tpl, i) => {
+    const parts = [];
+    if (tpl.dur) parts.push('⏱ ' + tpl.dur + ' min');
+    const nj = (tpl.A || []).length + (tpl.B || []).length;
+    if (nj) parts.push(nj + ' jugadores');
+    if (tpl.int) parts.push('int. ' + (INTENSIDADES[tpl.int] || tpl.int).toLowerCase());
+    return '<div class="team-item">' + pzLibPreviewSvg(tpl) +
+      '<button class="t-main" onclick="pzLibAdd(' + i + ')">' +
+        '<div class="t-name">' + esc(tpl.n) + '</div>' +
+        '<div class="t-sub">' + parts.join(' · ') + '</div></button>' +
+      '<div class="t-act"><button onclick="pzLibAdd(' + i + ')" title="Agregar">➕</button></div></div>';
+  }).join('');
+  openOverlay('ovLib');
+}
+function pzLibAdd(i){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  const tpl = PZ_LIB[i];
+  if (!tpl) return;
+  const e = pzLibToExercise(tpl, t.id);
+  S.exercises.push(e);
+  saveData();
+  closeOverlay('ovLib');
+  pzTabView = 'ex';
+  renderPizarra();
+  pzOpen(e.id);
+  toast('"' + tpl.n + '" agregado a tu equipo');
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/sessions.js ===== Sesiones de entrenamiento (bloques)
