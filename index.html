@@ -3833,7 +3833,9 @@ const INTENSIDADES = { baja:'Baja', media:'Media', alta:'Alta', maxima:'Máxima'
 let pz = null;         // copia de trabajo del ejercicio abierto en el editor
 let pzSnap = '';       // snapshot para detectar cambios sin guardar
 let pzSel = null;      // selección en la cancha: {type:'tok'|'zone', id}
-let pzDrag = null;     // arrastre en curso
+let pzDrag = {};       // arrastres en curso por puntero (multi-touch: una ficha por dedo)
+let pzPts = {};        // última posición conocida de cada puntero
+let pzRot = null;      // rotación de zona con dos dedos: {id, pA, pB, a0, rot0}
 let pzFrame = 0;       // paso (fotograma) seleccionado de la animación
 let pzPlaying = null;  // reproducción en curso: {seg, t0, raf}
 let pzRec = null;      // grabación de video en curso
@@ -3943,6 +3945,7 @@ function importExerciseJson(text, teamId){
   e.board = e.board || { view:'chips', tokens:[], zones:[] };
   e.board.tokens = e.board.tokens || [];
   e.board.zones = e.board.zones || [];
+  e.board.lines = e.board.lines || [];
   e.board.tokens.forEach(t => { delete t.pid; });
   S.exercises.push(e);
   saveData();
@@ -3993,7 +3996,7 @@ function pzBlank(t){
     categoria:null, jugadores:[],
     carga:{ dur:null, series:null, reps:null, pasada:null, descanso:null, intensidad:'' },
     plan:{ dia:null, micro:'', etapa:'' },
-    board:{ view:'chips', tokens:toks, zones:[], frames:[{ pos:pos }] }
+    board:{ view:'chips', tokens:toks, zones:[], lines:[], guide:'', frames:[{ pos:pos }] }
   };
 }
 function pzNew(){
@@ -4013,6 +4016,8 @@ function pzOpen(id){
   pz.board = pz.board || { view:'chips', tokens:[], zones:[] };
   pz.board.tokens = pz.board.tokens || [];
   pz.board.zones = pz.board.zones || [];
+  pz.board.lines = pz.board.lines || [];
+  pz.board.guide = pz.board.guide || '';
   // Migración a animación (Etapa 13): ejercicios viejos sin pasos
   if (!Array.isArray(pz.board.frames) || !pz.board.frames.length){
     pz.board.frames = [{ pos:{} }];
@@ -4207,11 +4212,30 @@ function pzRenderTools(){
           '<button class="chip" onclick="pzAddZone(\'rect\')">➕ ▭ zona</button>' +
           '<button class="chip" onclick="pzAddZone(\'circle\')">➕ ⬯ zona</button>' +
           '<button class="chip" onclick="pzAddZone(\'tri\')">➕ △ zona</button>' +
+          '<button class="chip" onclick="pzAddLine(\'flecha\')">➕ → flecha</button>' +
+          '<button class="chip" onclick="pzAddLine(\'punteada\')">➕ ⇢ punteada</button>' +
+          '<button class="chip" onclick="pzAddLine(\'linea\')">➕ ─ línea</button>' +
+          '<button class="chip" onclick="pzToggleGuide()">▦ ' + ({ '':'Guías: no', grid:'Guías: 5×7', tercios:'Guías: tercios', carriles:'Guías: carriles' }[pz.board.guide || '']) + '</button>' +
           '<button class="chip on" onclick="pzToggleView()">' + (pz.board.view === 'chips' ? '🏃 Ver figuras' : '⬤ Ver chapitas') + '</button>';
-  if (selZone) h += '<button class="chip" onclick="pzZoneColor()">🎨 Color</button>';
+  const selLine = pzSel && pzSel.type === 'line';
+  if (selZone || selLine) h += '<button class="chip" onclick="pzZoneColor()">🎨 Color</button>';
+  if (selZone) h += '<button class="chip" onclick="pzZoneRotate()">↻ Girar</button>';
   if (selTok) h += '<button class="chip" onclick="pzTokLabel()">🏷 Nombre</button>';
-  if (selTok || selZone) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelSel()">🗑 Borrar</button>';
+  if (selTok || selZone || selLine) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelSel()">🗑 Borrar</button>';
   document.getElementById('pzTools').innerHTML = h;
+}
+function pzAddLine(tipo){
+  const n = pz.board.lines.length;
+  const off = (n % 4) * 5;
+  const ln = { id:uid(), tipo, x1:20 + off, y1:44 + off, x2:44 + off, y2:58 + off, color:3 };
+  pz.board.lines.push(ln);
+  pzSel = { type:'line', id:ln.id };
+  pzRenderTools(); pzRenderBoard();
+}
+function pzToggleGuide(){
+  const orden = ['', 'grid', 'tercios', 'carriles'];
+  pz.board.guide = orden[(orden.indexOf(pz.board.guide || '') + 1) % orden.length];
+  pzRenderTools(); pzRenderBoard();
 }
 function pzAddTok(kind){
   const b = pz.board;
@@ -4230,9 +4254,11 @@ function pzAddZone(shape, cuadrada){
   pzRenderTools(); pzRenderBoard();
 }
 function pzZoneColor(){
-  const z = pzSel && pzSel.type === 'zone' ? pz.board.zones.find(x => x.id === pzSel.id) : null;
-  if (!z) return;
-  z.color = (z.color + 1) % PZ_ZONE_COLORS.length;
+  let o = null;
+  if (pzSel && pzSel.type === 'zone') o = pz.board.zones.find(x => x.id === pzSel.id);
+  if (pzSel && pzSel.type === 'line') o = pz.board.lines.find(x => x.id === pzSel.id);
+  if (!o) return;
+  o.color = (o.color + 1) % PZ_ZONE_COLORS.length;
   pzRenderBoard();
 }
 function pzDelSel(){
@@ -4240,6 +4266,8 @@ function pzDelSel(){
   if (pzSel.type === 'tok'){
     pz.board.tokens = pz.board.tokens.filter(t => t.id !== pzSel.id);
     pz.board.frames.forEach(f => { delete f.pos[pzSel.id]; });
+  } else if (pzSel.type === 'line'){
+    pz.board.lines = pz.board.lines.filter(l => l.id !== pzSel.id);
   } else pz.board.zones = pz.board.zones.filter(z => z.id !== pzSel.id);
   pzSel = null;
   pzRenderTools(); pzRenderBoard();
@@ -4267,6 +4295,52 @@ const PZ_FIELD = (function(){
   return s;
 })();
 
+function pzGuideMarkup(g){
+  if (!g) return '';
+  const L = 'stroke="#f8fafc" stroke-width=".25" opacity=".35" stroke-dasharray="1.2 1.2"';
+  let s = '';
+  if (g === 'grid' || g === 'carriles'){
+    for (let i = 1; i < 5; i++){
+      const x = 2 + 64 * i / 5;
+      s += '<line x1="' + x + '" y1="2" x2="' + x + '" y2="103" ' + L + '/>';
+    }
+  }
+  if (g === 'grid'){
+    for (let j = 1; j < 7; j++){
+      const y = 2 + 101 * j / 7;
+      s += '<line x1="2" y1="' + y.toFixed(2) + '" x2="66" y2="' + y.toFixed(2) + '" ' + L + '/>';
+    }
+  }
+  if (g === 'tercios'){
+    [2 + 101 / 3, 2 + 202 / 3].forEach(y => {
+      s += '<line x1="2" y1="' + y.toFixed(2) + '" x2="66" y2="' + y.toFixed(2) + '" ' + L + '/>';
+    });
+  }
+  return s;
+}
+function pzArrowHead(ln){
+  const ang = Math.atan2(ln.y2 - ln.y1, ln.x2 - ln.x1), s = 2.6;
+  const p1x = ln.x2 - s * Math.cos(ang - .45), p1y = ln.y2 - s * Math.sin(ang - .45);
+  const p2x = ln.x2 - s * Math.cos(ang + .45), p2y = ln.y2 - s * Math.sin(ang + .45);
+  return [[p1x, p1y], [p2x, p2y]];
+}
+function pzLineMarkup(ln, sel){
+  const col = PZ_ZONE_COLORS[ln.color % PZ_ZONE_COLORS.length];
+  const dash = ln.tipo === 'punteada' ? ' stroke-dasharray="2 1.6"' : '';
+  let h = '<g data-pz="line:' + ln.id + '">' +
+    '<line x1="' + ln.x1 + '" y1="' + ln.y1 + '" x2="' + ln.x2 + '" y2="' + ln.y2 + '" stroke="rgba(0,0,0,0)" stroke-width="6" pointer-events="stroke"/>' +
+    '<line x1="' + ln.x1 + '" y1="' + ln.y1 + '" x2="' + ln.x2 + '" y2="' + ln.y2 + '" stroke="' + col + '" stroke-width=".7" stroke-linecap="round"' + dash + '/>';
+  if (ln.tipo !== 'linea'){
+    const hd = pzArrowHead(ln);
+    h += '<polygon points="' + ln.x2 + ',' + ln.y2 + ' ' + hd[0][0].toFixed(2) + ',' + hd[0][1].toFixed(2) + ' ' + hd[1][0].toFixed(2) + ',' + hd[1][1].toFixed(2) + '" fill="' + col + '"/>';
+  }
+  h += '</g>';
+  if (sel){
+    h += '<circle data-pz="lh1:' + ln.id + '" cx="' + ln.x1 + '" cy="' + ln.y1 + '" r="2.4" fill="#fff" stroke="#0f172a" stroke-width=".3"/>' +
+         '<circle data-pz="lh2:' + ln.id + '" cx="' + ln.x2 + '" cy="' + ln.y2 + '" r="2.4" fill="#fff" stroke="#0f172a" stroke-width=".3"/>';
+  }
+  return h;
+}
 function pzZoneMarkup(z, sel){
   const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
   let shape;
@@ -4282,7 +4356,21 @@ function pzZoneMarkup(z, sel){
     h = '<rect x="' + (z.x - .8) + '" y="' + (z.y - .8) + '" width="' + (z.w + 1.6) + '" height="' + (z.h + 1.6) + '" fill="none" stroke="#fff" stroke-width=".3" stroke-dasharray="1 1"/>' + h +
         '<rect data-pz="handle:' + z.id + '" x="' + (z.x + z.w - 1.6) + '" y="' + (z.y + z.h - 1.6) + '" width="3.2" height="3.2" rx=".6" fill="#fff" stroke="#0f172a" stroke-width=".25"/>';
   }
-  return h;
+  // La rotación gira TODO el grupo (forma + selección + manija) sobre el centro
+  return '<g transform="rotate(' + (z.rot || 0) + ' ' + (z.x + z.w / 2) + ' ' + (z.y + z.h / 2) + ')">' + h + '</g>';
+}
+function pzZoneRotate(){
+  const z = (pzSel && pzSel.type === 'zone') ? pz.board.zones.find(x => x.id === pzSel.id) : null;
+  if (!z) return;
+  z.rot = ((z.rot || 0) + 15) % 360;
+  pzRenderBoard();
+}
+function pzAngleDeg(a, b){ return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI; }
+// Convierte un punto global a las coordenadas locales de la zona (des-rota)
+function pzZoneLocal(z, p){
+  const cx = z.x + z.w / 2, cy = z.y + z.h / 2, a = -(z.rot || 0) * Math.PI / 180;
+  const dx = p.x - cx, dy = p.y - cy;
+  return { x: cx + dx * Math.cos(a) - dy * Math.sin(a), y: cy + dx * Math.sin(a) + dy * Math.cos(a) };
 }
 function pzTokShortLabel(tk){
   let s = String(tk.label || '').trim();
@@ -4312,8 +4400,9 @@ function pzRenderBoard(){
   const svg = document.getElementById('pzSvg');
   if (!svg || !pz) return;
   const b = pz.board;
-  svg.innerHTML = PZ_FIELD +
+  svg.innerHTML = PZ_FIELD + pzGuideMarkup(b.guide) +
     b.zones.map(z => pzZoneMarkup(z, !!(pzSel && pzSel.type === 'zone' && pzSel.id === z.id))).join('') +
+    (b.lines || []).map(l => pzLineMarkup(l, !!(pzSel && pzSel.type === 'line' && pzSel.id === l.id))).join('') +
     b.tokens.map(t => pzTokMarkup(t, b.view, !!(pzSel && pzSel.type === 'tok' && pzSel.id === t.id))).join('');
 }
 
@@ -4431,6 +4520,14 @@ function pzCanvasDraw(ctx, W, pos, board){
   [[34, 52.5], [34, 13], [34, 92]].forEach(c => { ctx.beginPath(); ctx.arc(c[0], c[1], .7, 0, 7); ctx.fill(); });
   ctx.strokeRect(13.84, 2, 40.32, 16.5); ctx.strokeRect(24.84, 2, 18.32, 5.5);
   ctx.strokeRect(13.84, 86.5, 40.32, 16.5); ctx.strokeRect(24.84, 97.5, 18.32, 5.5);
+  if (b.guide){
+    ctx.strokeStyle = 'rgba(248,250,252,.35)'; ctx.lineWidth = .25; ctx.setLineDash([1.2, 1.2]);
+    const gl = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+    if (b.guide === 'grid' || b.guide === 'carriles') for (let i = 1; i < 5; i++) gl(2 + 64 * i / 5, 2, 2 + 64 * i / 5, 103);
+    if (b.guide === 'grid') for (let j = 1; j < 7; j++) gl(2, 2 + 101 * j / 7, 66, 2 + 101 * j / 7);
+    if (b.guide === 'tercios'){ gl(2, 2 + 101 / 3, 66, 2 + 101 / 3); gl(2, 2 + 202 / 3, 66, 2 + 202 / 3); }
+    ctx.setLineDash([]);
+  }
   b.zones.forEach(z => {
     const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
     ctx.beginPath();
@@ -4439,6 +4536,18 @@ function pzCanvasDraw(ctx, W, pos, board){
     else ctx.rect(z.x, z.y, z.w, z.h);
     ctx.globalAlpha = .28; ctx.fillStyle = col; ctx.fill();
     ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.setLineDash([1.6, 1]); ctx.stroke(); ctx.setLineDash([]);
+  });
+  (b.lines || []).forEach(ln => {
+    const col = PZ_ZONE_COLORS[ln.color % PZ_ZONE_COLORS.length];
+    ctx.strokeStyle = col; ctx.lineWidth = .7; ctx.lineCap = 'round';
+    if (ln.tipo === 'punteada') ctx.setLineDash([2, 1.6]);
+    ctx.beginPath(); ctx.moveTo(ln.x1, ln.y1); ctx.lineTo(ln.x2, ln.y2); ctx.stroke();
+    ctx.setLineDash([]);
+    if (ln.tipo !== 'linea'){
+      const hd = pzArrowHead(ln);
+      ctx.beginPath(); ctx.moveTo(ln.x2, ln.y2); ctx.lineTo(hd[0][0], hd[0][1]); ctx.lineTo(hd[1][0], hd[1][1]); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill();
+    }
   });
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   b.tokens.forEach(t => {
@@ -4541,6 +4650,8 @@ function pzXY(e){
   svg.addEventListener('pointerdown', e => {
     if (!pz || pzPlaying) return;
     e.preventDefault();
+    const p = pzXY(e);
+    pzPts[e.pointerId] = p;
     const g = e.target.closest ? e.target.closest('[data-pz]') : null;
     if (!g){
       if (pzSel){ pzSel = null; pzRenderTools(); pzRenderBoard(); }
@@ -4548,46 +4659,87 @@ function pzXY(e){
     }
     const parts = g.getAttribute('data-pz').split(':');
     const kind = parts[0], id = parts[1];
-    const p = pzXY(e);
-    if (kind === 'handle'){
-      pzDrag = { kind, id };
-    } else if (kind === 'tok'){
+    if (kind === 'tok'){
       const tk = pz.board.tokens.find(t => t.id === id);
       if (!tk) return;
-      pzDrag = { kind, id, dx: tk.x - p.x, dy: tk.y - p.y };
+      pzDrag[e.pointerId] = { kind, id, dx: tk.x - p.x, dy: tk.y - p.y };
       pzSel = { type:'tok', id };
-    } else {
+    } else if (kind === 'zone'){
       const z = pz.board.zones.find(t => t.id === id);
       if (!z) return;
-      pzDrag = { kind, id, dx: z.x - p.x, dy: z.y - p.y };
+      // segundo dedo sobre la MISMA zona => gesto de rotacion
+      const otro = Object.keys(pzDrag).find(pid => Number(pid) !== e.pointerId &&
+        pzDrag[pid].kind === 'zone' && pzDrag[pid].id === id);
+      if (otro !== undefined && pzPts[otro]){
+        pzRot = { id, pA:Number(otro), pB:e.pointerId, a0:pzAngleDeg(pzPts[otro], p), rot0:z.rot || 0 };
+        delete pzDrag[otro];
+      } else {
+        pzDrag[e.pointerId] = { kind, id, dx: z.x - p.x, dy: z.y - p.y };
+      }
       pzSel = { type:'zone', id };
+    } else if (kind === 'line'){
+      const ln = pz.board.lines.find(t => t.id === id);
+      if (!ln) return;
+      pzDrag[e.pointerId] = { kind, id, dx1: ln.x1 - p.x, dy1: ln.y1 - p.y, dx2: ln.x2 - p.x, dy2: ln.y2 - p.y };
+      pzSel = { type:'line', id };
+    } else {   // handle (tamano de zona) / lh1 / lh2 (extremos de linea)
+      pzDrag[e.pointerId] = { kind, id };
     }
     pzRenderTools(); pzRenderBoard();
     try { svg.setPointerCapture(e.pointerId); } catch(err){}
   });
   svg.addEventListener('pointermove', e => {
-    if (!pz || !pzDrag) return;
-    e.preventDefault();
+    if (!pz) return;
     const p = pzXY(e);
-    if (pzDrag.kind === 'tok'){
-      const tk = pz.board.tokens.find(t => t.id === pzDrag.id);
+    pzPts[e.pointerId] = pzPts[e.pointerId] ? p : pzPts[e.pointerId];
+    // rotacion con dos dedos sobre una zona
+    if (pzRot && (e.pointerId === pzRot.pA || e.pointerId === pzRot.pB)){
+      e.preventDefault();
+      const z = pz.board.zones.find(t => t.id === pzRot.id);
+      const pa = pzPts[pzRot.pA], pb = pzPts[pzRot.pB];
+      if (z && pa && pb){
+        z.rot = Math.round(((pzRot.rot0 + pzAngleDeg(pa, pb) - pzRot.a0) % 360 + 360) % 360);
+        pzRenderBoard();
+      }
+      return;
+    }
+    const d = pzDrag[e.pointerId];
+    if (!d) return;
+    e.preventDefault();
+    if (d.kind === 'tok'){
+      const tk = pz.board.tokens.find(t => t.id === d.id);
       if (!tk) return;
-      tk.x = pzClamp(p.x + pzDrag.dx, 2.5, 65.5);
-      tk.y = pzClamp(p.y + pzDrag.dy, 2.5, 102.5);
-    } else if (pzDrag.kind === 'zone'){
-      const z = pz.board.zones.find(t => t.id === pzDrag.id);
+      tk.x = pzClamp(p.x + d.dx, 2.5, 65.5);
+      tk.y = pzClamp(p.y + d.dy, 2.5, 102.5);
+    } else if (d.kind === 'zone'){
+      const z = pz.board.zones.find(t => t.id === d.id);
       if (!z) return;
-      z.x = pzClamp(p.x + pzDrag.dx, 0, 68 - z.w);
-      z.y = pzClamp(p.y + pzDrag.dy, 0, 105 - z.h);
-    } else {
-      const z = pz.board.zones.find(t => t.id === pzDrag.id);
+      z.x = pzClamp(p.x + d.dx, 0, 68 - z.w);
+      z.y = pzClamp(p.y + d.dy, 0, 105 - z.h);
+    } else if (d.kind === 'line'){
+      const ln = pz.board.lines.find(t => t.id === d.id);
+      if (!ln) return;
+      ln.x1 = pzClamp(p.x + d.dx1, 1, 67); ln.y1 = pzClamp(p.y + d.dy1, 1, 104);
+      ln.x2 = pzClamp(p.x + d.dx2, 1, 67); ln.y2 = pzClamp(p.y + d.dy2, 1, 104);
+    } else if (d.kind === 'lh1' || d.kind === 'lh2'){
+      const ln = pz.board.lines.find(t => t.id === d.id);
+      if (!ln) return;
+      if (d.kind === 'lh1'){ ln.x1 = pzClamp(p.x, 1, 67); ln.y1 = pzClamp(p.y, 1, 104); }
+      else { ln.x2 = pzClamp(p.x, 1, 67); ln.y2 = pzClamp(p.y, 1, 104); }
+    } else {   // handle: cambiar tamano (des-rotando el punto si la zona esta girada)
+      const z = pz.board.zones.find(t => t.id === d.id);
       if (!z) return;
-      z.w = pzClamp(p.x - z.x, 5, 68 - z.x);
-      z.h = pzClamp(p.y - z.y, 5, 105 - z.y);
+      const lp = pzZoneLocal(z, p);
+      z.w = pzClamp(lp.x - z.x, 5, 68 - z.x);
+      z.h = pzClamp(lp.y - z.y, 5, 105 - z.y);
     }
     pzRenderBoard();
   });
-  const pzUp = () => { pzDrag = null; };
+  const pzUp = e => {
+    delete pzDrag[e.pointerId];
+    delete pzPts[e.pointerId];
+    if (pzRot && (e.pointerId === pzRot.pA || e.pointerId === pzRot.pB)) pzRot = null;
+  };
   svg.addEventListener('pointerup', pzUp);
   svg.addEventListener('pointercancel', pzUp);
 })();
