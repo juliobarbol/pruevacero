@@ -682,9 +682,13 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 
   <div class="pz-tools" id="pzTools"></div>
   <div class="pz-pitchwrap"><svg id="pzSvg" viewBox="0 0 68 105" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="pz-tools" id="pzFrames" style="margin-top:10px"></div>
   <p class="hint" style="margin-top:8px">Tocá una ficha o zona para seleccionarla y
   arrastrala para moverla. Con una zona seleccionada: arrastrá el cuadradito blanco
-  de la esquina para cambiar el tamaño y usá 🎨 para el color.</p>
+  de la esquina para cambiar el tamaño y usá 🎨 para el color.<br>
+  <b>Animación</b>: cada "paso" es una foto de las posiciones. Agregá un paso,
+  mové las fichas a donde siguen, y ▶ Play muestra el movimiento. 🎥 Video
+  descarga la animación como archivo para compartir.</p>
 
   <h3 class="pz-h3">📝 Datos del ejercicio</h3>
   <label>Nombre *</label><input id="pzNombre" placeholder="Ej: Rondo 4 vs 2" autocomplete="off">
@@ -3203,6 +3207,17 @@ function renderClases(){
       '<button class="btn mini" onclick="openAsis(document.getElementById(\'asisFecha\').value)">Abrir</button>' +
     '</div></div>';
 
+  // Ejercicios de la pizarra planificados para el día de hoy (Etapa 14)
+  const exHoy = S.exercises.filter(e => e.teamId === t.id && e.plan && e.plan.dia === dowOf(hoy) &&
+    (!claseCat || !e.categoria || e.categoria === claseCat));
+  if (exHoy.length){
+    html += '<div class="card"><h3>📋 Ejercicios planificados para hoy</h3>' +
+      exHoy.map(e => '<button class="mp-row" onclick="switchTab(\'pizarra\');pzOpen(\'' + e.id + '\')">' +
+        '<div class="nm">' + esc(e.nombre) + '</div>' +
+        '<div class="mm">' + ((e.carga && e.carga.dur) ? e.carga.dur + ' min' : '') + '</div></button>').join('') +
+      '<p class="hint" style="margin-top:8px">Salen del día de la semana que le pusiste a cada ejercicio en la pestaña 📋 Pizarra.</p></div>';
+  }
+
   const sheets = S.attendance
     .filter(a => a.teamId === t.id && (a.catId || null) === (claseCat || null))
     .sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)));
@@ -3746,6 +3761,10 @@ let pz = null;         // copia de trabajo del ejercicio abierto en el editor
 let pzSnap = '';       // snapshot para detectar cambios sin guardar
 let pzSel = null;      // selección en la cancha: {type:'tok'|'zone', id}
 let pzDrag = null;     // arrastre en curso
+let pzFrame = 0;       // paso (fotograma) seleccionado de la animación
+let pzPlaying = null;  // reproducción en curso: {seg, t0, raf}
+let pzRec = null;      // grabación de video en curso
+const PZ_SEG_MS = 1200;   // duración de la transición entre pasos
 
 /* --- pestaña: lista de ejercicios --- */
 function exercisesOf(teamId){ return S.exercises.filter(e => e.teamId === teamId); }
@@ -3778,12 +3797,29 @@ function exCardHtml(t, e){
   const cat = e.categoria ? teamCats(t).find(x => x.id === e.categoria) : null;
   if (cat) parts.push(cat.nombre);
   if ((e.jugadores || []).length) parts.push(e.jugadores.length + ' jugador' + (e.jugadores.length === 1 ? '' : 'es'));
+  const nFrames = (e.board && e.board.frames) ? e.board.frames.length : 1;
+  if (nFrames > 1) parts.push('🎬 ' + nFrames + ' pasos');
   return '<div class="team-item">' +
     '<button class="t-main" onclick="pzOpen(\'' + e.id + '\')">' +
       '<div class="t-name">📋 ' + esc(e.nombre) + '</div>' +
       '<div class="t-sub">' + (parts.map(esc).join(' · ') || 'sin datos de carga') + '</div>' +
     '</button>' +
-    '<div class="t-act"><button onclick="exDelete(\'' + e.id + '\')" title="Borrar">🗑</button></div></div>';
+    '<div class="t-act">' +
+      '<button onclick="exDuplicate(\'' + e.id + '\')" title="Duplicar">⧉</button>' +
+      '<button onclick="exDelete(\'' + e.id + '\')" title="Borrar">🗑</button>' +
+    '</div></div>';
+}
+function exDuplicate(id){
+  const e = S.exercises.find(x => x.id === id);
+  if (!e) return;
+  const c = JSON.parse(JSON.stringify(e));
+  c.id = uid();
+  c.nombre = e.nombre + ' (copia)';
+  c.creado = todayISO();
+  S.exercises.push(c);
+  saveData();
+  renderPizarra();
+  toast('Ejercicio duplicado: "' + c.nombre + '"');
 }
 async function exDelete(id){
   const e = S.exercises.find(x => x.id === id);
@@ -3802,13 +3838,15 @@ function pzBlank(t){
   xs.forEach((x, i) => toks.push({ id:uid(), kind:'A', num:i + 1, x, y:24 }));
   xs.forEach((x, i) => toks.push({ id:uid(), kind:'B', num:i + 1, x, y:81 }));
   toks.push({ id:uid(), kind:'ball', num:0, x:34, y:52.5 });
+  const pos = {};
+  toks.forEach(t2 => { pos[t2.id] = { x:t2.x, y:t2.y }; });
   return {
     id:uid(), teamId:t.id, creado:todayISO(),
     nombre:'', descripcion:'', materiales:'',
     categoria:null, jugadores:[],
     carga:{ dur:null, series:null, reps:null, pasada:null, descanso:null, intensidad:'' },
     plan:{ dia:null, micro:'', etapa:'' },
-    board:{ view:'chips', tokens:toks, zones:[] }
+    board:{ view:'chips', tokens:toks, zones:[], frames:[{ pos:pos }] }
   };
 }
 function pzNew(){
@@ -3828,6 +3866,14 @@ function pzOpen(id){
   pz.board = pz.board || { view:'chips', tokens:[], zones:[] };
   pz.board.tokens = pz.board.tokens || [];
   pz.board.zones = pz.board.zones || [];
+  // Migración a animación (Etapa 13): ejercicios viejos sin pasos
+  if (!Array.isArray(pz.board.frames) || !pz.board.frames.length){
+    pz.board.frames = [{ pos:{} }];
+  }
+  pz.board.frames.forEach(f => {
+    f.pos = f.pos || {};
+    pz.board.tokens.forEach(t => { if (!f.pos[t.id]) f.pos[t.id] = { x:t.x, y:t.y }; });
+  });
   pzSel = null;
   pzOpenUI('Ejercicio');
 }
@@ -3843,8 +3889,10 @@ function pzOpenUI(title){
   document.getElementById('pzInt').value = c.intensidad || '';
   setv('pzMicro', pz.plan.micro);
   document.getElementById('pzEtapa').value = pz.plan.etapa || '';
+  pzFrame = 0;
+  pzLoadPos(0);
   pzRenderCatSel(); pzRenderPlayers(); pzRenderDias(); pzDensCalc();
-  pzRenderTools(); pzRenderBoard();
+  pzRenderTools(); pzRenderFrames(); pzRenderBoard();
   pzCollect();
   pzSnap = JSON.stringify(pz);
   openOverlay('ovBoard');
@@ -3852,6 +3900,7 @@ function pzOpenUI(title){
 // Junta lo que está en los campos del formulario dentro de pz
 function pzCollect(){
   if (!pz) return;
+  pzStorePos();   // las posiciones actuales quedan en el paso seleccionado
   const num = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
   pz.nombre = document.getElementById('pzNombre').value.trim();
   pz.descripcion = document.getElementById('pzDesc').value.trim();
@@ -3865,6 +3914,7 @@ function pzCollect(){
 }
 function pzSave(){
   if (!pz) return;
+  if (pzPlaying) pzStop();
   pzCollect();
   if (!pz.nombre){ toast('Ponele un nombre al ejercicio', true); return; }
   const ix = S.exercises.findIndex(x => x.id === pz.id);
@@ -3876,6 +3926,7 @@ function pzSave(){
   toast('Ejercicio guardado');
 }
 async function pzBack(){
+  if (pzPlaying) pzStop();
   if (pz){
     pzCollect();
     if (JSON.stringify(pz) !== pzSnap){
@@ -3957,6 +4008,7 @@ function pzAddTok(kind){
   const num = kind === 'ball' ? 0 : b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0) + 1;
   const tk = { id:uid(), kind, num, x:34, y: kind === 'A' ? 40 : (kind === 'B' ? 65 : 52.5) };
   b.tokens.push(tk);
+  b.frames.forEach(f => { f.pos[tk.id] = { x:tk.x, y:tk.y }; });   // aparece en todos los pasos
   pzSel = { type:'tok', id:tk.id };
   pzRenderTools(); pzRenderBoard();
 }
@@ -3975,8 +4027,10 @@ function pzZoneColor(){
 }
 function pzDelSel(){
   if (!pzSel) return;
-  if (pzSel.type === 'tok') pz.board.tokens = pz.board.tokens.filter(t => t.id !== pzSel.id);
-  else pz.board.zones = pz.board.zones.filter(z => z.id !== pzSel.id);
+  if (pzSel.type === 'tok'){
+    pz.board.tokens = pz.board.tokens.filter(t => t.id !== pzSel.id);
+    pz.board.frames.forEach(f => { delete f.pos[pzSel.id]; });
+  } else pz.board.zones = pz.board.zones.filter(z => z.id !== pzSel.id);
   pzSel = null;
   pzRenderTools(); pzRenderBoard();
 }
@@ -4046,6 +4100,210 @@ function pzRenderBoard(){
     b.tokens.map(t => pzTokMarkup(t, b.view, !!(pzSel && pzSel.type === 'tok' && pzSel.id === t.id))).join('');
 }
 
+/* --- animación por pasos (fotogramas clave, Etapa 13) --- */
+function pzPosSnapshot(){
+  const o = {};
+  pz.board.tokens.forEach(t => { o[t.id] = { x:t.x, y:t.y }; });
+  return o;
+}
+function pzStorePos(){
+  if (pz && pz.board.frames && pz.board.frames[pzFrame]) pz.board.frames[pzFrame].pos = pzPosSnapshot();
+}
+function pzLoadPos(i){
+  const f = pz.board.frames[i];
+  if (!f) return;
+  pz.board.tokens.forEach(t => { const p = f.pos[t.id]; if (p){ t.x = p.x; t.y = p.y; } });
+}
+function pzRenderFrames(){
+  const box = document.getElementById('pzFrames');
+  if (!box || !pz) return;
+  const n = pz.board.frames.length;
+  let h = '<button class="chip on" onclick="pzPlayToggle()">' + (pzPlaying ? '⏹ Parar' : '▶ Play') + '</button>' +
+    pz.board.frames.map((f, i) =>
+      '<button class="chip' + (i === pzFrame && !pzPlaying ? ' on' : '') + '" onclick="pzGoFrame(' + i + ')">Paso ' + (i + 1) + '</button>').join('') +
+    '<button class="chip" onclick="pzAddFrame()">➕ paso</button>';
+  if (n > 1) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelFrame()">🗑 paso</button>';
+  h += '<button class="chip" onclick="pzExportVideo()">🎥 Video</button>';
+  box.innerHTML = h;
+}
+function pzGoFrame(i){
+  if (pzPlaying || !pz.board.frames[i]) return;
+  pzStorePos();
+  pzFrame = i;
+  pzLoadPos(i);
+  pzRenderFrames(); pzRenderBoard();
+}
+function pzAddFrame(){
+  if (pzPlaying) return;
+  pzStorePos();
+  pz.board.frames.splice(pzFrame + 1, 0, { pos:pzPosSnapshot() });
+  pzFrame++;
+  pzRenderFrames(); pzRenderBoard();
+  toast('Paso ' + (pzFrame + 1) + ': mové las fichas a la posición que sigue');
+}
+function pzDelFrame(){
+  if (pzPlaying || pz.board.frames.length < 2) return;
+  pz.board.frames.splice(pzFrame, 1);
+  pzFrame = Math.max(0, pzFrame - 1);
+  pzLoadPos(pzFrame);
+  pzRenderFrames(); pzRenderBoard();
+}
+function pzEase(k){ return k * k * (3 - 2 * k); }   // arranque y frenada suaves
+function pzLerpPos(a, b, k){
+  const o = {};
+  pz.board.tokens.forEach(t => {
+    const pa = a[t.id] || t, pb = b[t.id] || pa;
+    o[t.id] = { x: pa.x + (pb.x - pa.x) * k, y: pa.y + (pb.y - pa.y) * k };
+  });
+  return o;
+}
+function pzPlayToggle(){ pzPlaying ? pzStop() : pzPlay(); }
+function pzPlay(){
+  if (pz.board.frames.length < 2){ toast('Agregá al menos 2 pasos para animar (botón "➕ paso")', true); return; }
+  pzStorePos();
+  pzSel = null;
+  pzPlaying = { seg:0, t0:performance.now(), raf:0 };
+  pzRenderTools(); pzRenderFrames();
+  pzLoadPos(0); pzRenderBoard();
+  pzPlaying.raf = requestAnimationFrame(pzTick);
+}
+function pzTick(now){
+  if (!pzPlaying) return;
+  const fr = pz.board.frames;
+  let k = (now - pzPlaying.t0) / PZ_SEG_MS;
+  if (k >= 1){
+    pzPlaying.seg++;
+    pzPlaying.t0 = now;
+    k = 0;
+    if (pzPlaying.seg >= fr.length - 1){ pzStop(); return; }
+  }
+  pzApplyPos(pzLerpPos(fr[pzPlaying.seg].pos, fr[pzPlaying.seg + 1].pos, pzEase(Math.min(1, k))));
+  pzPlaying.raf = requestAnimationFrame(pzTick);
+}
+function pzApplyPos(pos){
+  const svg = document.getElementById('pzSvg');
+  pz.board.tokens.forEach(t => {
+    const p = pos[t.id];
+    const el = svg.querySelector('[data-pz="tok:' + t.id + '"]');
+    if (p && el) el.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')');
+  });
+}
+function pzStop(){
+  if (pzPlaying && pzPlaying.raf) cancelAnimationFrame(pzPlaying.raf);
+  pzPlaying = null;
+  pzLoadPos(pzFrame);
+  pzRenderTools(); pzRenderFrames(); pzRenderBoard();
+}
+
+/* --- exportar video (WebM con MediaRecorder, Etapa 14) --- */
+const PZ_SHIRT_PATH = 'M-2.5,-1.5 L-0.9,-1.9 Q0,-2.15 0.9,-1.9 L2.5,-1.5 L2,0.8 L1.4,0.6 L1.4,3.1 L-1.4,3.1 L-1.4,0.6 L-2,0.8 Z';
+// Dibuja la pizarra completa en un canvas (misma escena que el SVG)
+function pzCanvasDraw(ctx, W, pos){
+  const k = W / 68;
+  ctx.save();
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  ctx.fillStyle = '#15803d'; ctx.fillRect(0, 0, 68, 105);
+  ctx.fillStyle = 'rgba(22,101,52,.5)';
+  for (let i = 1; i < 10; i += 2) ctx.fillRect(0, i * 10.5, 68, 10.5);
+  ctx.strokeStyle = 'rgba(248,250,252,.85)'; ctx.lineWidth = .45; ctx.fillStyle = 'rgba(248,250,252,.85)';
+  ctx.strokeRect(2, 2, 64, 101);
+  ctx.beginPath(); ctx.moveTo(2, 52.5); ctx.lineTo(66, 52.5); ctx.stroke();
+  ctx.beginPath(); ctx.arc(34, 52.5, 9.15, 0, 7); ctx.stroke();
+  [[34, 52.5], [34, 13], [34, 92]].forEach(c => { ctx.beginPath(); ctx.arc(c[0], c[1], .7, 0, 7); ctx.fill(); });
+  ctx.strokeRect(13.84, 2, 40.32, 16.5); ctx.strokeRect(24.84, 2, 18.32, 5.5);
+  ctx.strokeRect(13.84, 86.5, 40.32, 16.5); ctx.strokeRect(24.84, 97.5, 18.32, 5.5);
+  pz.board.zones.forEach(z => {
+    const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
+    ctx.beginPath();
+    if (z.shape === 'circle') ctx.ellipse(z.x + z.w / 2, z.y + z.h / 2, z.w / 2, z.h / 2, 0, 0, 7);
+    else if (z.shape === 'tri'){ ctx.moveTo(z.x + z.w / 2, z.y); ctx.lineTo(z.x, z.y + z.h); ctx.lineTo(z.x + z.w, z.y + z.h); ctx.closePath(); }
+    else ctx.rect(z.x, z.y, z.w, z.h);
+    ctx.globalAlpha = .28; ctx.fillStyle = col; ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.setLineDash([1.6, 1]); ctx.stroke(); ctx.setLineDash([]);
+  });
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  pz.board.tokens.forEach(t => {
+    const p = pos[t.id] || t;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (t.kind === 'ball'){
+      ctx.beginPath(); ctx.arc(0, 0, 2, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = .2; ctx.strokeStyle = '#0f172a'; ctx.stroke();
+      ctx.font = '3.1px sans-serif'; ctx.fillStyle = '#0f172a'; ctx.fillText('⚽', 0, .15);
+    } else if (pz.board.view === 'figs'){
+      ctx.beginPath(); ctx.arc(0, -2.9, 1.35, 0, 7); ctx.fillStyle = '#eab188'; ctx.fill();
+      const shirt = new Path2D(PZ_SHIRT_PATH);
+      ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill(shirt);
+      ctx.lineWidth = .18; ctx.strokeStyle = '#f8fafc'; ctx.stroke(shirt);
+      ctx.font = '700 2px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(String(t.num), 0, 1.4);
+    } else {
+      ctx.beginPath(); ctx.arc(0, 0, 2.9, 0, 7); ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill();
+      ctx.lineWidth = .35; ctx.strokeStyle = '#f8fafc'; ctx.stroke();
+      ctx.font = '800 2.7px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(String(t.num), 0, .1);
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+}
+async function pzExportVideo(){
+  if (!pz || pzPlaying) return;
+  pzStorePos();
+  const fr = pz.board.frames;
+  if (fr.length < 2){ toast('Agregá al menos 2 pasos para generar el video', true); return; }
+  if (typeof MediaRecorder === 'undefined' || !document.createElement('canvas').captureStream){
+    toast('Este navegador no puede grabar video (probá con Chrome)', true); return;
+  }
+  if (pzRec){ toast('Ya hay un video generándose, esperá un momento', true); return; }
+  const W = 544, H = 840;   // 68×105 a 8 px por unidad
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const stream = canvas.captureStream(30);
+  const mime = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '');
+  let rec;
+  try { rec = new MediaRecorder(stream, mime ? { mimeType:mime } : undefined); }
+  catch(e){ toast('Este navegador no puede grabar video (probá con Chrome)', true); return; }
+  const chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const grabado = new Promise(res => { rec.onstop = res; });
+  pzRec = rec;
+  toast('🎥 Generando el video…');
+  rec.start(200);
+  const HOLD = 700;                                    // pausa al inicio y al final
+  const total = HOLD + (fr.length - 1) * PZ_SEG_MS + HOLD;
+  const t0 = performance.now();
+  await new Promise(res => {
+    const step = now => {
+      const t = now - t0;
+      let pos;
+      if (t <= HOLD) pos = fr[0].pos;
+      else if (t >= total - HOLD) pos = fr[fr.length - 1].pos;
+      else {
+        const u = (t - HOLD) / PZ_SEG_MS;
+        const seg = Math.min(fr.length - 2, Math.floor(u));
+        pos = pzLerpPos(fr[seg].pos, fr[seg + 1].pos, pzEase(Math.min(1, u - seg)));
+      }
+      pzCanvasDraw(ctx, W, pos);
+      if (t >= total) res(); else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+  rec.stop();
+  await grabado;
+  pzRec = null;
+  const blob = new Blob(chunks, { type:'video/webm' });
+  if (!blob.size){ toast('No se pudo generar el video en este navegador', true); return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ejercicio-' + _slug(pz.nombre || 'pizarra') + '-' + todayISO() + '.webm';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 300);
+  toast('🎥 Video descargado');
+}
+
 /* --- interacción táctil / mouse sobre la cancha --- */
 function pzClamp(v, a, b){ return Math.min(b, Math.max(a, v)); }
 function pzXY(e){
@@ -4056,7 +4314,7 @@ function pzXY(e){
 (function(){
   const svg = document.getElementById('pzSvg');
   svg.addEventListener('pointerdown', e => {
-    if (!pz) return;
+    if (!pz || pzPlaying) return;
     e.preventDefault();
     const g = e.target.closest ? e.target.closest('[data-pz]') : null;
     if (!g){
