@@ -807,6 +807,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 <div id="toasts"></div>
 <input type="file" id="fileBackup" accept=".json,application/json" style="display:none" onchange="importBackupFile(event)">
 <input type="file" id="filePlayer" accept=".json,application/json" style="display:none" onchange="importPlayerFile(event)">
+<input type="file" id="fileExercise" accept=".json,application/json" style="display:none" onchange="importExerciseFile(event)">
 <input type="file" id="filePhotoPlayer" accept="image/*" style="display:none" onchange="photoPlayerFile(event)">
 <input type="file" id="fileLogoTeam" accept="image/*" style="display:none" onchange="logoTeamFile(event)">
 
@@ -3866,8 +3867,9 @@ function renderPizarra(){
   }
   const exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
   h += '<div class="btn-row" style="margin-top:0">' +
-    '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>' +
-    '<button class="btn sec" onclick="openLib()">📚 Biblioteca</button></div>';
+    '<button class="btn" onclick="pzNew()">➕ Nuevo</button>' +
+    '<button class="btn sec" onclick="openLib()">📚 Biblioteca</button>' +
+    '<button class="btn sec" onclick="document.getElementById(\'fileExercise\').click()">📥 Importar</button></div>';
   if (!exs.length){
     h += '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
   } else {
@@ -3895,6 +3897,7 @@ function exCardHtml(t, e){
     '</button>' +
     '<div class="t-act">' +
       '<button onclick="exPdf(\'' + e.id + '\')" title="PDF">📄</button>' +
+      '<button onclick="exExport(\'' + e.id + '\')" title="Compartir (archivo)">📤</button>' +
       '<button onclick="exDuplicate(\'' + e.id + '\')" title="Duplicar">⧉</button>' +
       '<button onclick="exDelete(\'' + e.id + '\')" title="Borrar">🗑</button>' +
     '</div></div>';
@@ -3910,6 +3913,59 @@ function exDuplicate(id){
   saveData();
   renderPizarra();
   toast('Ejercicio duplicado: "' + c.nombre + '"');
+}
+/* --- compartir ejercicios entre instalaciones (patrón ficha de jugador) --- */
+function exExport(id){
+  const e = S.exercises.find(x => x.id === id);
+  if (!e) return;
+  const c = JSON.parse(JSON.stringify(e));
+  // Lo atado a ESTA instalación no viaja: jugadores/categoría son ids locales.
+  // Los nombres visibles en las fichas (label) sí viajan.
+  c.jugadores = [];
+  c.categoria = null;
+  (c.board && c.board.tokens || []).forEach(t => { delete t.pid; });
+  const payload = { _app:'PruevaCero', _type:'pc_exercise_v1', _version:1, _exportedAt:new Date().toISOString(), exercise:c };
+  download('ejercicio-' + _slug(e.nombre || 'pizarra') + '.json', JSON.stringify(payload, null, 2));
+  toast('Ejercicio exportado (mandá el archivo por donde quieras)');
+}
+function importExerciseJson(text, teamId){
+  const j = JSON.parse(text);
+  if (!j || j._type !== 'pc_exercise_v1' || !j.exercise || !j.exercise.nombre) return null;
+  const e = j.exercise;
+  e.id = uid();
+  e.teamId = teamId;
+  e.creado = todayISO();
+  e.categoria = null;
+  e.jugadores = [];
+  e.carga = e.carga || {};
+  e.plan = e.plan || {};
+  e.board = e.board || { view:'chips', tokens:[], zones:[] };
+  e.board.tokens = e.board.tokens || [];
+  e.board.zones = e.board.zones || [];
+  e.board.tokens.forEach(t => { delete t.pid; });
+  S.exercises.push(e);
+  saveData();
+  return e;
+}
+function importExerciseFile(ev){
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  const t = activeTeam();
+  if (!t){ toast('Primero creá/elegí un equipo', true); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const e = importExerciseJson(rd.result, t.id);
+      if (!e) throw 0;
+      pzTabView = 'ex';
+      renderPizarra();
+      toast('"' + e.nombre + '" importado a "' + t.nombre + '"');
+    } catch(err){
+      toast('El archivo no es un ejercicio de PruevaCero', true);
+    }
+  };
+  rd.readAsText(f);
 }
 async function exDelete(id){
   const e = S.exercises.find(x => x.id === id);
