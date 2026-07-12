@@ -708,8 +708,9 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <button class="btn sec mini" onclick="pzPlayersToBoard('A')">🔴 Ponerlos en la cancha</button>
     <button class="btn sec mini" onclick="pzPlayersToBoard('B')">🔵 Ponerlos en la cancha</button>
   </div>
-  <p class="hint" style="margin-top:6px">Los participantes elegidos entran a la
-  cancha con su nombre debajo de la ficha. También podés ponerle nombre a
+  <p class="hint" style="margin-top:6px">Los participantes entran con su nombre,
+  <b>reemplazan</b> a las fichas sin nombre de ese color y se ubican según su
+  posición (arquero, defensa, medio, ataque). También podés ponerle nombre a
   cualquier ficha a mano: seleccionala y tocá 🏷.</p>
 
   <h3 class="pz-h3">⏱️ Dosificación de la carga</h3>
@@ -4123,27 +4124,45 @@ function pzTogglePlayer(id){
   if (ix >= 0) pz.jugadores.splice(ix, 1); else pz.jugadores.push(id);
   pzRenderPlayers();
 }
-// Pone en la cancha (como rojos o azules) los participantes que faltan
+// Pone en la cancha (como rojos o azules) los participantes que faltan.
+// REEMPLAZA las fichas sin nombre de ese color y ubica a cada jugador según
+// su línea (arquero / defensor / medio / atacante); sin posición => medio.
 function pzPlayersToBoard(kind){
   const b = pz.board;
-  const nuevos = pz.jugadores.filter(pid => !b.tokens.some(t => t.pid === pid));
-  if (!nuevos.length){
+  const faltan = pz.jugadores.filter(pid => !b.tokens.some(t => t.pid === pid));
+  if (!faltan.length){
     toast(pz.jugadores.length ? 'Todos los participantes ya están en la cancha' : 'Primero elegí jugadores tocando sus nombres', true);
     return;
   }
-  let num = b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0);
-  nuevos.forEach((pid, i) => {
+  // 1) las fichas genéricas (sin jugador) de ese color se van: las reemplazan
+  b.tokens.filter(t => t.kind === kind && !t.pid).forEach(t => {
+    b.frames.forEach(f => { delete f.pos[t.id]; });
+  });
+  b.tokens = b.tokens.filter(t => !(t.kind === kind && !t.pid));
+  // 2) agrupar por línea y ubicar en su franja de la cancha
+  const porLinea = { arquero:[], defensor:[], medio:[], atacante:[] };
+  faltan.forEach(pid => {
     const p = S.players.find(x => x.id === pid);
-    num++;
-    const tk = { id:uid(), kind, num, pid, label: p ? p.nombre : '',
-                 x: 10 + (i % 5) * 12,
-                 y: kind === 'A' ? 32 + Math.floor(i / 5) * 9 : 73 - Math.floor(i / 5) * 9 };
-    b.tokens.push(tk);
-    b.frames.forEach(f => { f.pos[tk.id] = { x:tk.x, y:tk.y }; });
+    const l = (p && p.posicion && porLinea[p.posicion.linea]) ? p.posicion.linea : 'medio';
+    porLinea[l].push(p || { id:pid, nombre:'' });
+  });
+  const YS = (kind === 'A')
+    ? { arquero:8,  defensor:22, medio:36, atacante:49 }    // rojos: mitad de arriba
+    : { arquero:97, defensor:83, medio:69, atacante:56 };   // azules: mitad de abajo
+  let num = b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0);
+  ['arquero', 'defensor', 'medio', 'atacante'].forEach(l => {
+    const fila = porLinea[l];
+    fila.forEach((p, i) => {
+      num++;
+      const tk = { id:uid(), kind, num, pid:p.id, label:p.nombre || '',
+                   x: pzClamp(68 * (i + 1) / (fila.length + 1), 6, 62), y: YS[l] };
+      b.tokens.push(tk);
+      b.frames.forEach(f => { f.pos[tk.id] = { x:tk.x, y:tk.y }; });
+    });
   });
   pzSel = null;
   pzRenderTools(); pzRenderBoard();
-  toast(nuevos.length + ' jugador' + (nuevos.length === 1 ? '' : 'es') + ' a la cancha (con su nombre)');
+  toast(faltan.length + ' jugador' + (faltan.length === 1 ? '' : 'es') + ' a la cancha, ubicados por posición');
 }
 async function pzTokLabel(){
   const tk = (pzSel && pzSel.type === 'tok') ? pz.board.tokens.find(t => t.id === pzSel.id) : null;
