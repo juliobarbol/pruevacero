@@ -3852,9 +3852,15 @@ function renderPizarra(){
   }
   let h = '<div class="gr-seg">' +
     '<button class="' + (pzTabView === 'ex' ? 'on' : '') + '" onclick="pzSetView(\'ex\')">📋 Ejercicios</button>' +
-    '<button class="' + (pzTabView === 'ses' ? 'on' : '') + '" onclick="pzSetView(\'ses\')">🗓 Sesiones</button></div>';
+    '<button class="' + (pzTabView === 'ses' ? 'on' : '') + '" onclick="pzSetView(\'ses\')">🗓 Sesiones</button>' +
+    '<button class="' + (pzTabView === 'week' ? 'on' : '') + '" onclick="pzSetView(\'week\')">📅 Semana</button></div>';
   if (pzTabView === 'ses'){
     h += renderSesList(t);
+    box.innerHTML = h;
+    return;
+  }
+  if (pzTabView === 'week'){
+    h += renderPzWeek(t);
     box.innerHTML = h;
     return;
   }
@@ -4511,6 +4517,51 @@ function pzXY(e){
   svg.addEventListener('pointercancel', pzUp);
 })();
 
+/* --- vista 📅 Semana (microciclo): clases + partidos + sesiones + ejercicios --- */
+let pzWeekOff = 0;   // 0 = semana actual, -1 anterior, +1 siguiente…
+function isoShift(iso, n){
+  const p = String(iso).split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2] + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function pzWeekNav(d){
+  pzWeekOff = (d === 0) ? 0 : pzWeekOff + d;
+  renderPizarra();
+}
+function renderPzWeek(t){
+  const DIAS_SEM = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const hoy = todayISO();
+  const lunes = isoShift(hoy, -((dowOf(hoy) + 6) % 7) + pzWeekOff * 7);
+  let h = '<div class="chips" style="margin-top:2px">' +
+    '<button class="chip" onclick="pzWeekNav(-1)">‹ anterior</button>' +
+    '<button class="chip' + (pzWeekOff === 0 ? ' on' : '') + '" onclick="pzWeekNav(0)">Semana actual</button>' +
+    '<button class="chip" onclick="pzWeekNav(1)">siguiente ›</button></div>' +
+    '<p class="hint" style="margin-bottom:10px">Semana del ' + fmtFecha(lunes) + ' al ' + fmtFecha(isoShift(lunes, 6)) +
+    '. Junta las clases (días de cada categoría), los partidos y las sesiones (por fecha) y los ejercicios (por día de la semana).</p>';
+  const cats = teamCats(t);
+  for (let i = 0; i < 7; i++){
+    const fecha = isoShift(lunes, i), dow = dowOf(fecha);
+    const items = [];
+    cats.forEach(c => {
+      if ((c.dias || []).includes(dow))
+        items.push('<div class="histline"><span>🗓️ Clase · ' + esc(c.nombre) + '</span><b>' + (c.hora ? esc(c.hora) + ' hs' : '') + '</b></div>');
+    });
+    S.matches.filter(m => m.teamId === t.id && m.fecha === fecha).forEach(m =>
+      items.push('<button class="mp-row" onclick="openMatch(\'' + m.id + '\')"><div class="nm">⚽ vs ' + esc(m.rival || 'Rival') + '</div></button>'));
+    S.trainSessions.filter(s => s.teamId === t.id && s.fecha === fecha).forEach(s =>
+      items.push('<button class="mp-row" onclick="sesOpen(\'' + s.id + '\')"><div class="nm">🏋️ ' + esc(s.nombre) + '</div>' +
+        '<div class="mm">' + (sesTotalMin(s) ? sesTotalMin(s) + ' min' : '') + '</div></button>'));
+    S.exercises.filter(e => e.teamId === t.id && e.plan && e.plan.dia === dow).forEach(e =>
+      items.push('<button class="mp-row" onclick="pzOpen(\'' + e.id + '\')"><div class="nm">📋 ' + esc(e.nombre) + '</div>' +
+        '<div class="mm">' + ((e.carga && e.carga.dur) ? e.carga.dur + ' min' : '') + '</div></button>'));
+    const esHoy = fecha === hoy;
+    h += '<div class="card"' + (esHoy ? ' style="border-color:var(--accent)"' : '') + '>' +
+      '<h3>' + DIAS_SEM[dow] + ' ' + fmtFecha(fecha).slice(0, 5) + (esHoy ? ' · <span style="color:var(--accent)">HOY</span>' : '') + '</h3>' +
+      (items.length ? items.join('') : '<p class="hint">Nada planificado.</p>') + '</div>';
+  }
+  return h;
+}
+
 /* --- biblioteca de ejercicios precargados --- */
 // Formato compacto: n nombre · d descripción · m materiales · dur/se/re/pa/de/int carga
 // A/B fichas [x,y] · ball/balls pelotas · z zonas [forma,x,y,w,h,color]
@@ -4740,7 +4791,7 @@ function sesSave(){
   saveData();
   sesSnap = JSON.stringify(ses);
   closeOverlay('ovSes');
-  pzTabView = 'ses';
+  if (pzTabView === 'ex') pzTabView = 'ses';
   renderPizarra();
   toast('Sesión guardada');
 }
