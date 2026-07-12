@@ -169,6 +169,12 @@ exercise = {                   // ejercicio de la pizarra táctica (Etapa 12)
   }
 }
 
+trainSession = {               // sesión de entrenamiento (Etapa 16)
+  id, teamId, creado, nombre, fecha|null, categoria|null, notas,
+  bloques: [{ id, tipo:'cal'|'ppal'|'vc', exId|null, titulo, min|null }]
+  // min null en un ejercicio => usa carga.dur del ejercicio; el total se deriva
+}
+
 evalAspects = [{ id, nombre, archivada? }]   // aspectos configurables
 // (9 precargados: pase, control, gambeta, definición, cabezazo, velocidad,
 // visión, marca, actitud). Radar en canvas propio (drawRadar, sin librerías)
@@ -226,6 +232,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 13 | **Pizarra táctica — animación**: pasos clave (fotogramas en `board.frames`, migración automática de ejercicios viejos) + ▶ Play con movimiento suave (interpolación con easing, rAF) | HECHA (2026-07-12) |
 | 14 | **Pizarra táctica — video y pulido**: 🎥 exportar la animación como video WebM (canvas + `captureStream` + `MediaRecorder`, dibuja la misma escena en canvas), ⧉ duplicar ejercicio, y tarjeta "Ejercicios planificados para hoy" en la pestaña Clases (por día de la semana del ejercicio) | HECHA (2026-07-12) |
 | 15 | **Pizarra — nombres y jugadores reales** (pedido 2026-07-12): nombre debajo de cada ficha (🏷 manual en cualquier ficha, o automático al subir participantes); en Participantes, filtro por **equipo y categoría** para buscar jugadores de CUALQUIER equipo (elección manual libre) y botones "🔴/🔵 Ponerlos en la cancha" (crea fichas con `pid` + nombre, sin duplicar) | HECHA (2026-07-12) |
+| 16 | **Sesiones de entrenamiento** (`js/sessions.js`, vista "🗓 Sesiones" en la pestaña Pizarra): la sesión del día junta ejercicios en 3 bloques (🔥 calentamiento / ⚽ parte principal / 🧘 vuelta a la calma) + actividades libres; minutos por ítem (default = duración del ejercicio) con subtotales y total que suman solos; fecha + categoría + notas; duplicar sesión; tarjeta "🏋️ Sesión de hoy" en Clases. `S.trainSessions` | HECHA (2026-07-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 

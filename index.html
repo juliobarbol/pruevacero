@@ -745,6 +745,38 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   </div>
 </div>
 
+<!-- ══════════════ OVERLAY SESIÓN DE ENTRENAMIENTO ══════════════ -->
+<div class="overlay" id="ovSes">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="sesBack()">←</button>
+    <h2 id="sesTitle">Sesión</h2>
+    <button class="icon-btn" onclick="sesSave()" title="Guardar">💾</button>
+  </div>
+  <label>Nombre *</label><input id="sesNombre" placeholder="Ej: Martes — técnica y finalización" autocomplete="off">
+  <div class="form-grid">
+    <div><label>Fecha</label><input id="sesFecha" type="date"></div>
+    <div><label>Categoría</label><select id="sesCat"></select></div>
+  </div>
+  <p class="hint" id="sesTotal" style="margin-top:10px"></p>
+  <div id="sesBloques"></div>
+  <label>Notas</label><textarea id="sesNotas" rows="2" placeholder="Observaciones, material especial, recordatorios…"></textarea>
+  <div class="btn-row">
+    <button class="btn sec" onclick="sesBack()">Cancelar</button>
+    <button class="btn" onclick="sesSave()">💾 Guardar</button>
+  </div>
+</div>
+
+<!-- ══════════════ OVERLAY ELEGIR EJERCICIO PARA LA SESIÓN ══════════════ -->
+<div class="overlay" id="ovSesPick">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovSesPick')">←</button>
+    <h2>Elegir ejercicio</h2>
+  </div>
+  <div id="sesPickList"></div>
+  <p class="hint" style="margin-top:12px">Los ejercicios se crean y dibujan en la
+  pestaña 📋 Pizarra (vista Ejercicios).</p>
+</div>
+
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -837,12 +869,14 @@ function loadData(){
         d.evalAspects  = d.evalAspects  || DEF_ASPECTS.slice();
         d.grupos       = d.grupos       || DEF_GRUPOS.map(g => Object.assign({}, g));
         d.exercises    = d.exercises    || [];
+        d.trainSessions = d.trainSessions || [];
         return d;
       }
     }
   } catch(e){}
   return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[],
-           evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)), exercises:[] };
+           evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)), exercises:[],
+           trainSessions:[] };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -1330,6 +1364,7 @@ async function catDelete(id){
   t.categorias = t.categorias.filter(x => x.id !== id);
   S.matches.forEach(m => { if (m.teamId === t.id && m.categoria === id) m.categoria = null; });
   S.exercises.forEach(e => { if (e.teamId === t.id && e.categoria === id) e.categoria = null; });
+  S.trainSessions.forEach(s => { if (s.teamId === t.id && s.categoria === id) s.categoria = null; });
   if (jugCat === id) jugCat = '';
   saveData();
   renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
@@ -3218,6 +3253,17 @@ function renderClases(){
       '<button class="btn mini" onclick="openAsis(document.getElementById(\'asisFecha\').value)">Abrir</button>' +
     '</div></div>';
 
+  // Sesiones de entrenamiento con fecha de HOY
+  const sesHoy = S.trainSessions.filter(s => s.teamId === t.id && s.fecha === hoy &&
+    (!claseCat || !s.categoria || s.categoria === claseCat));
+  if (sesHoy.length){
+    html += '<div class="card"><h3>🏋️ Sesión de hoy</h3>' +
+      sesHoy.map(s => '<button class="mp-row" onclick="switchTab(\'pizarra\');sesOpen(\'' + s.id + '\')">' +
+        '<div class="nm">' + esc(s.nombre) + '</div>' +
+        '<div class="mm">' + (sesTotalMin(s) ? sesTotalMin(s) + ' min' : '') + '</div></button>').join('') +
+      '</div>';
+  }
+
   // Ejercicios de la pizarra planificados para el día de hoy (Etapa 14)
   const exHoy = S.exercises.filter(e => e.teamId === t.id && e.plan && e.plan.dia === dowOf(hoy) &&
     (!claseCat || !e.categoria || e.categoria === claseCat));
@@ -3780,6 +3826,8 @@ const PZ_SEG_MS = 1200;   // duración de la transición entre pasos
 /* --- pestaña: lista de ejercicios --- */
 function exercisesOf(teamId){ return S.exercises.filter(e => e.teamId === teamId); }
 
+let pzTabView = 'ex';   // vista de la pestaña Pizarra: 'ex' ejercicios | 'ses' sesiones
+function pzSetView(v){ pzTabView = v; renderPizarra(); }
 function renderPizarra(){
   const box = document.getElementById('pizarraContent');
   if (!box) return;
@@ -3788,8 +3836,16 @@ function renderPizarra(){
     box.innerHTML = '<div class="empty"><div class="big">📋</div>Creá un equipo para empezar<br>a armar ejercicios en la pizarra.</div>';
     return;
   }
+  let h = '<div class="gr-seg">' +
+    '<button class="' + (pzTabView === 'ex' ? 'on' : '') + '" onclick="pzSetView(\'ex\')">📋 Ejercicios</button>' +
+    '<button class="' + (pzTabView === 'ses' ? 'on' : '') + '" onclick="pzSetView(\'ses\')">🗓 Sesiones</button></div>';
+  if (pzTabView === 'ses'){
+    h += renderSesList(t);
+    box.innerHTML = h;
+    return;
+  }
   const exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
-  let h = '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>';
+  h += '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>';
   if (!exs.length){
     h += '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
   } else {
@@ -4437,6 +4493,206 @@ function pzXY(e){
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/sessions.js ===== Sesiones de entrenamiento (bloques)
+   ═══════════════════════════════════════════════════════════════════ */
+// trainSession = { id, teamId, creado, nombre, fecha|null, categoria|null, notas,
+//   bloques: [{ id, tipo:'cal'|'ppal'|'vc', exId|null, titulo, min|null }] }
+// min vacío en un ejercicio => usa la duración de la carga del ejercicio.
+const SES_TIPOS = [['cal', '🔥 Calentamiento'], ['ppal', '⚽ Parte principal'], ['vc', '🧘 Vuelta a la calma']];
+
+let ses = null, sesSnap = '', sesPickTipo = null;
+
+function sesItemMin(it){
+  if (it.min != null) return Number(it.min) || 0;
+  const e = it.exId ? S.exercises.find(x => x.id === it.exId) : null;
+  return (e && e.carga && Number(e.carga.dur)) || 0;
+}
+function sesTotalMin(s){ return (s.bloques || []).reduce((m, it) => m + sesItemMin(it), 0); }
+function sesItemTitle(it){
+  if (it.exId){
+    const e = S.exercises.find(x => x.id === it.exId);
+    return e ? e.nombre : '(ejercicio borrado)';
+  }
+  return it.titulo || 'Actividad';
+}
+function renderSesList(t){
+  const list = S.trainSessions.filter(s => s.teamId === t.id)
+    .slice().sort((a, b) => String(b.fecha || b.creado || '').localeCompare(String(a.fecha || a.creado || '')));
+  let h = '<button class="btn" onclick="sesNew()">➕ Nueva sesión</button>';
+  if (!list.length){
+    h += '<div class="empty"><div class="big">🗓</div>Todavía no hay sesiones.<br>Una sesión junta varios ejercicios en<br>bloques: calentamiento, parte principal<br>y vuelta a la calma, con el tiempo total.</div>';
+    return h;
+  }
+  h += '<div style="margin-top:12px">' + list.map(s => {
+    const parts = [];
+    if (s.fecha) parts.push(fmtFecha(s.fecha));
+    const tot = sesTotalMin(s);
+    if (tot) parts.push('⏱ ' + tot + ' min');
+    const n = (s.bloques || []).length;
+    parts.push(n + ' bloque' + (n === 1 ? '' : 's'));
+    const cat = s.categoria ? teamCats(t).find(c => c.id === s.categoria) : null;
+    if (cat) parts.push(cat.nombre);
+    return '<div class="team-item">' +
+      '<button class="t-main" onclick="sesOpen(\'' + s.id + '\')">' +
+        '<div class="t-name">🗓 ' + esc(s.nombre) + '</div>' +
+        '<div class="t-sub">' + parts.map(esc).join(' · ') + '</div></button>' +
+      '<div class="t-act">' +
+        '<button onclick="sesDuplicate(\'' + s.id + '\')" title="Duplicar">⧉</button>' +
+        '<button onclick="sesDelete(\'' + s.id + '\')" title="Borrar">🗑</button>' +
+      '</div></div>';
+  }).join('') + '</div>';
+  return h;
+}
+function sesNew(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  ses = { id:uid(), teamId:t.id, creado:todayISO(), nombre:'', fecha:todayISO(), categoria:null, notas:'', bloques:[] };
+  sesOpenUI('Nueva sesión');
+}
+function sesOpen(id){
+  const s = S.trainSessions.find(x => x.id === id);
+  if (!s) return;
+  ses = JSON.parse(JSON.stringify(s));
+  ses.bloques = ses.bloques || [];
+  sesOpenUI('Sesión');
+}
+function sesOpenUI(title){
+  document.getElementById('sesTitle').textContent = title;
+  document.getElementById('sesNombre').value = ses.nombre || '';
+  document.getElementById('sesFecha').value = ses.fecha || '';
+  document.getElementById('sesNotas').value = ses.notas || '';
+  const tm = S.teams.find(x => x.id === ses.teamId);
+  document.getElementById('sesCat').innerHTML = '<option value="">Todas / sin especificar</option>' +
+    teamCats(tm).map(c => '<option value="' + c.id + '"' + (ses.categoria === c.id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+  sesRenderBloques();
+  sesCollect();
+  sesSnap = JSON.stringify(ses);
+  openOverlay('ovSes');
+}
+function sesCollect(){
+  if (!ses) return;
+  ses.nombre = document.getElementById('sesNombre').value.trim();
+  ses.fecha = document.getElementById('sesFecha').value || null;
+  ses.categoria = document.getElementById('sesCat').value || null;
+  ses.notas = document.getElementById('sesNotas').value.trim();
+}
+function sesSave(){
+  if (!ses) return;
+  sesCollect();
+  if (!ses.nombre){ toast('Ponele un nombre a la sesión', true); return; }
+  const ix = S.trainSessions.findIndex(x => x.id === ses.id);
+  if (ix >= 0) S.trainSessions[ix] = ses; else S.trainSessions.push(ses);
+  saveData();
+  sesSnap = JSON.stringify(ses);
+  closeOverlay('ovSes');
+  pzTabView = 'ses';
+  renderPizarra();
+  toast('Sesión guardada');
+}
+async function sesBack(){
+  if (ses){
+    sesCollect();
+    if (JSON.stringify(ses) !== sesSnap){
+      const ok = await appConfirm('Salir sin guardar', 'Hay cambios sin guardar en la sesión. ¿Salir igual?', { okLabel:'Salir', danger:true });
+      if (!ok) return;
+    }
+  }
+  closeOverlay('ovSes');
+}
+async function sesDelete(id){
+  const s = S.trainSessions.find(x => x.id === id);
+  if (!s) return;
+  const ok = await appConfirm('Borrar sesión', '¿Borrar "' + s.nombre + '"? Los ejercicios NO se borran (siguen en la pizarra).', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.trainSessions = S.trainSessions.filter(x => x.id !== id);
+  saveData();
+  renderPizarra();
+}
+function sesDuplicate(id){
+  const s = S.trainSessions.find(x => x.id === id);
+  if (!s) return;
+  const c = JSON.parse(JSON.stringify(s));
+  c.id = uid();
+  c.nombre = s.nombre + ' (copia)';
+  c.creado = todayISO();
+  c.bloques.forEach(b => { b.id = uid(); });
+  S.trainSessions.push(c);
+  saveData();
+  renderPizarra();
+  toast('Sesión duplicada: "' + c.nombre + '"');
+}
+/* --- bloques --- */
+function sesRenderBloques(){
+  const tot = sesTotalMin(ses);
+  document.getElementById('sesTotal').innerHTML = '⏱ <b>Total de la sesión: ' + tot + ' min</b>' +
+    (tot ? '' : ' — los minutos salen de cada bloque (o de la duración del ejercicio)');
+  document.getElementById('sesBloques').innerHTML = SES_TIPOS.map(tp => {
+    const items = ses.bloques.filter(b => b.tipo === tp[0]);
+    const sub = items.reduce((m, it) => m + sesItemMin(it), 0);
+    return '<div class="card"><h3>' + tp[1] + (sub ? ' · ' + sub + ' min' : '') + '</h3>' +
+      items.map(it =>
+        '<div class="res-row">' +
+          (it.exId
+            ? '<button class="nm" style="text-align:left" onclick="pzOpen(\'' + it.exId + '\')">📋 ' + esc(sesItemTitle(it)) + '</button>'
+            : '<div class="nm">' + esc(sesItemTitle(it)) + '</div>') +
+          '<input type="number" inputmode="numeric" min="0" style="width:64px;flex:none;text-align:center" value="' + (it.min != null ? it.min : '') + '"' +
+            ' placeholder="' + sesItemMin(it) + '" onchange="sesSetMin(\'' + it.id + '\', this.value)" title="Minutos">' +
+          '<button class="icon-btn" style="width:34px;height:34px" onclick="sesMoveUp(\'' + it.id + '\')" title="Subir">↑</button>' +
+          '<button class="icon-btn" style="width:34px;height:34px;color:var(--danger)" onclick="sesDelItem(\'' + it.id + '\')" title="Quitar">🗑</button>' +
+        '</div>').join('') +
+      (items.length ? '' : '<p class="hint">Sin actividades en este bloque.</p>') +
+      '<div class="btn-row">' +
+        '<button class="btn sec mini" onclick="sesPick(\'' + tp[0] + '\')">➕ Ejercicio de la pizarra</button>' +
+        '<button class="btn sec mini" onclick="sesAddLibre(\'' + tp[0] + '\')">➕ Actividad libre</button>' +
+      '</div></div>';
+  }).join('');
+}
+function sesSetMin(id, v){
+  const it = ses.bloques.find(b => b.id === id);
+  if (!it) return;
+  it.min = (v === '' ? null : Math.max(0, Number(v) || 0));
+  sesRenderBloques();
+}
+function sesMoveUp(id){
+  const ix = ses.bloques.findIndex(b => b.id === id);
+  if (ix < 0) return;
+  for (let j = ix - 1; j >= 0; j--){
+    if (ses.bloques[j].tipo === ses.bloques[ix].tipo){
+      const tmp = ses.bloques[j];
+      ses.bloques[j] = ses.bloques[ix];
+      ses.bloques[ix] = tmp;
+      break;
+    }
+  }
+  sesRenderBloques();
+}
+function sesDelItem(id){
+  ses.bloques = ses.bloques.filter(b => b.id !== id);
+  sesRenderBloques();
+}
+async function sesAddLibre(tipo){
+  const v = await appPromptText('Actividad libre', 'Nombre de la actividad (ej: movilidad articular, estiramientos, charla):', '');
+  if (!v) return;
+  ses.bloques.push({ id:uid(), tipo, exId:null, titulo:v, min:null });
+  sesRenderBloques();
+}
+function sesPick(tipo){
+  sesPickTipo = tipo;
+  const exs = exercisesOf(ses.teamId).slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  document.getElementById('sesPickList').innerHTML = exs.length ? exs.map(e =>
+    '<button class="mp-row" onclick="sesPickChoose(\'' + e.id + '\')">' +
+      '<div class="nm">📋 ' + esc(e.nombre) + '</div>' +
+      '<div class="mm">' + ((e.carga && e.carga.dur) ? e.carga.dur + ' min' : '') + '</div></button>').join('')
+    : '<div class="empty"><div class="big">📋</div>No hay ejercicios en este equipo.<br>Crealos en la vista Ejercicios de la Pizarra.</div>';
+  openOverlay('ovSesPick');
+}
+function sesPickChoose(exId){
+  ses.bloques.push({ id:uid(), tipo:sesPickTipo, exId, titulo:'', min:null });
+  closeOverlay('ovSesPick');
+  sesRenderBloques();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -5031,6 +5287,7 @@ function importBackupFile(ev){
       S.evalAspects = S.evalAspects || DEF_ASPECTS.slice();
       S.grupos = S.grupos || DEF_GRUPOS.map(g => Object.assign({}, g));
       S.exercises = S.exercises || [];
+      S.trainSessions = S.trainSessions || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
