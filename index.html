@@ -696,6 +696,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <label>Nombre *</label><input id="pzNombre" placeholder="Ej: Rondo 4 vs 2" autocomplete="off">
   <label>Descripción</label><textarea id="pzDesc" rows="3" placeholder="Cómo se juega, reglas, variantes…"></textarea>
   <label>Materiales</label><textarea id="pzMat" rows="2" placeholder="Conos, pecheras, pelotas…"></textarea>
+  <label>Carpeta (objetivo del ejercicio)</label><select id="pzCarpeta"></select>
 
   <h3 class="pz-h3">👥 Participantes</h3>
   <label>Categoría a la que apunta el ejercicio</label><select id="pzCat"></select>
@@ -746,6 +747,20 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <button class="btn sec" onclick="pzBack()">Cancelar</button>
     <button class="btn" onclick="pzSave()">💾 Guardar</button>
   </div>
+</div>
+
+<!-- ══════════════ OVERLAY CARPETAS DE EJERCICIOS ══════════════ -->
+<div class="overlay" id="ovFolders">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovFolders')">←</button>
+    <h2>Carpetas de ejercicios</h2>
+  </div>
+  <div id="foldersList"></div>
+  <button class="btn" onclick="folderCreate()">➕ Nueva carpeta</button>
+  <p class="hint" style="margin-top:12px">Las carpetas clasifican los ejercicios
+  por objetivo (físico, técnico, táctico, pelota parada…). Podés crear las que
+  quieras según se te vayan ocurriendo objetivos nuevos. Borrar una carpeta NO
+  borra sus ejercicios: quedan "sin carpeta".</p>
 </div>
 
 <!-- ══════════════ OVERLAY BIBLIOTECA DE EJERCICIOS ══════════════ -->
@@ -854,6 +869,18 @@ const DEF_GRUPOS = [
   { id:'gC', nombre:'Rojo',  color:'#ef4444' }
 ];
 
+// Carpetas para clasificar los ejercicios de la pizarra por objetivo.
+// Vienen estas 7 de base y el usuario puede crear/renombrar/borrar las suyas.
+const DEF_FOLDERS = [
+  { id:'f_fisico',  nombre:'Objetivo físico' },
+  { id:'f_tecnico', nombre:'Objetivo técnico' },
+  { id:'f_tactico', nombre:'Objetivo táctico' },
+  { id:'f_pparada', nombre:'Pelota parada' },
+  { id:'f_salida',  nombre:'Salida' },
+  { id:'f_presion', nombre:'Presión' },
+  { id:'f_coord',   nombre:'Coordinación' }
+];
+
 const LINEAS = { arquero:'Arquero', defensor:'Defensor', medio:'Mediocampista', atacante:'Atacante' };
 const ROLES = {
   arquero: [],
@@ -887,13 +914,14 @@ function loadData(){
         d.grupos       = d.grupos       || DEF_GRUPOS.map(g => Object.assign({}, g));
         d.exercises    = d.exercises    || [];
         d.trainSessions = d.trainSessions || [];
+        d.folders      = d.folders      || DEF_FOLDERS.map(f => Object.assign({}, f));
         return d;
       }
     }
   } catch(e){}
   return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[],
            evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)), exercises:[],
-           trainSessions:[] };
+           trainSessions:[], folders:DEF_FOLDERS.map(f => Object.assign({}, f)) };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -3898,17 +3926,74 @@ function renderPizarra(){
     box.innerHTML = h;
     return;
   }
-  const exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
+  let exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
   h += '<div class="btn-row" style="margin-top:0">' +
     '<button class="btn" onclick="pzNew()">➕ Nuevo</button>' +
     '<button class="btn sec" onclick="openLib()">📚 Biblioteca</button>' +
     '<button class="btn sec" onclick="document.getElementById(\'fileExercise\').click()">📥 Importar</button></div>';
+  // filtro por carpeta (objetivo)
+  if (pzFolderFilter && pzFolderFilter !== 'none' && !S.folders.some(f => f.id === pzFolderFilter)) pzFolderFilter = '';
+  h += '<div class="chips" style="margin-top:12px">' +
+    '<button class="chip' + (pzFolderFilter === '' ? ' on' : '') + '" onclick="pzSetFolder(\'\')">Todas</button>' +
+    S.folders.map(f => '<button class="chip' + (pzFolderFilter === f.id ? ' on' : '') + '" onclick="pzSetFolder(\'' + f.id + '\')">' + esc(f.nombre) + '</button>').join('') +
+    '<button class="chip' + (pzFolderFilter === 'none' ? ' on' : '') + '" onclick="pzSetFolder(\'none\')">Sin carpeta</button>' +
+    '<button class="chip" onclick="openFolders()">🗂 Carpetas…</button></div>';
+  if (pzFolderFilter === 'none') exs = exs.filter(e => !e.carpeta);
+  else if (pzFolderFilter) exs = exs.filter(e => e.carpeta === pzFolderFilter);
   if (!exs.length){
-    h += '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
+    h += pzFolderFilter
+      ? '<div class="empty"><div class="big">🗂</div>No hay ejercicios en esta carpeta.<br>La carpeta se elige al editar el ejercicio.</div>'
+      : '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
   } else {
-    h += '<div style="margin-top:12px">' + exs.map(e => exCardHtml(t, e)).join('') + '</div>';
+    h += '<div style="margin-top:6px">' + exs.map(e => exCardHtml(t, e)).join('') + '</div>';
   }
   box.innerHTML = h;
+}
+let pzFolderFilter = '';
+function pzSetFolder(id){ pzFolderFilter = id; renderPizarra(); }
+function openFolders(){
+  renderFoldersList();
+  openOverlay('ovFolders');
+}
+function renderFoldersList(){
+  document.getElementById('foldersList').innerHTML = S.folders.map(f => {
+    const n = S.exercises.filter(e => e.carpeta === f.id).length;
+    return '<div class="team-item"><div class="t-main">' +
+      '<div class="t-name">🗂 ' + esc(f.nombre) + '</div>' +
+      '<div class="t-sub">' + n + ' ejercicio' + (n === 1 ? '' : 's') + '</div></div>' +
+      '<div class="t-act">' +
+        '<button onclick="folderRename(\'' + f.id + '\')" title="Renombrar">✏️</button>' +
+        '<button onclick="folderDelete(\'' + f.id + '\')" title="Borrar">🗑</button>' +
+      '</div></div>';
+  }).join('') || '<div class="empty">Sin carpetas. Creá la primera abajo.</div>';
+}
+async function folderCreate(){
+  const nombre = await appPromptText('Nueva carpeta', 'Nombre del objetivo (ej: Transiciones, Finalización…):', '');
+  if (!nombre) return;
+  S.folders.push({ id:uid(), nombre });
+  saveData();
+  renderFoldersList(); renderPizarra();
+  toast('Carpeta "' + nombre + '" creada');
+}
+async function folderRename(id){
+  const f = S.folders.find(x => x.id === id);
+  if (!f) return;
+  const nombre = await appPromptText('Renombrar carpeta', '', f.nombre);
+  if (!nombre) return;
+  f.nombre = nombre;
+  saveData();
+  renderFoldersList(); renderPizarra();
+}
+async function folderDelete(id){
+  const f = S.folders.find(x => x.id === id);
+  if (!f) return;
+  const ok = await appConfirm('Borrar carpeta', '¿Borrar "' + f.nombre + '"? Sus ejercicios NO se borran: quedan sin carpeta.', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.folders = S.folders.filter(x => x.id !== id);
+  S.exercises.forEach(e => { if (e.carpeta === id) e.carpeta = null; });
+  if (pzFolderFilter === id) pzFolderFilter = '';
+  saveData();
+  renderFoldersList(); renderPizarra();
 }
 function exCardHtml(t, e){
   const parts = [];
@@ -3923,6 +4008,9 @@ function exCardHtml(t, e){
   if ((e.jugadores || []).length) parts.push(e.jugadores.length + ' jugador' + (e.jugadores.length === 1 ? '' : 'es'));
   const nFrames = (e.board && e.board.frames) ? e.board.frames.length : 1;
   if (nFrames > 1) parts.push('🎬 ' + nFrames + ' pasos');
+  if ((e.media || []).length) parts.push('🎞 ' + e.media.length);
+  const fol = e.carpeta ? S.folders.find(f => f.id === e.carpeta) : null;
+  if (fol) parts.push('🗂 ' + fol.nombre);
   return '<div class="team-item">' +
     '<button class="t-main" onclick="pzOpen(\'' + e.id + '\')">' +
       '<div class="t-name">📋 ' + esc(e.nombre) + '</div>' +
@@ -3979,6 +4067,8 @@ function importExerciseJson(text, teamId){
   e.board.zones = e.board.zones || [];
   e.board.lines = e.board.lines || [];
   e.media = [];
+  // la carpeta viaja solo si existe acá (las 7 de base comparten id)
+  if (e.carpeta && !S.folders.some(f => f.id === e.carpeta)) e.carpeta = null;
   e.board.tokens.forEach(t => { delete t.pid; });
   S.exercises.push(e);
   saveData();
@@ -4078,6 +4168,8 @@ function pzOpenUI(title){
   document.getElementById('pzEtapa').value = pz.plan.etapa || '';
   pzFrame = 0;
   pzLoadPos(0);
+  document.getElementById('pzCarpeta').innerHTML = '<option value="">Sin carpeta</option>' +
+    S.folders.map(f => '<option value="' + f.id + '"' + (pz.carpeta === f.id ? ' selected' : '') + '>' + esc(f.nombre) + '</option>').join('');
   pzRenderCatSel(); pzRenderEqF(); pzRenderCatF(); pzRenderPlayers(); pzRenderDias(); pzDensCalc();
   pzRenderTools(); pzRenderFrames(); pzRenderBoard(); pzRenderMedia();
   pzCollect();
@@ -4092,6 +4184,7 @@ function pzCollect(){
   pz.nombre = document.getElementById('pzNombre').value.trim();
   pz.descripcion = document.getElementById('pzDesc').value.trim();
   pz.materiales = document.getElementById('pzMat').value.trim();
+  pz.carpeta = document.getElementById('pzCarpeta').value || null;
   pz.categoria = document.getElementById('pzCat').value || null;
   pz.carga = { dur:num('pzDur'), series:num('pzSeries'), reps:num('pzReps'),
                pasada:num('pzPasada'), descanso:num('pzDescanso'),
@@ -6054,6 +6147,7 @@ function importBackupFile(ev){
       S.grupos = S.grupos || DEF_GRUPOS.map(g => Object.assign({}, g));
       S.exercises = S.exercises || [];
       S.trainSessions = S.trainSessions || [];
+      S.folders = S.folders || DEF_FOLDERS.map(f => Object.assign({}, f));
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
