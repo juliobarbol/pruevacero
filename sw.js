@@ -11,7 +11,7 @@
 // usuarios reciben la última versión sin bump manual.
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE = 'pruevacero-20260712-132632';
+const CACHE = 'pruevacero-20260712-143657';
 
 // Recursos propios (mismo origen) — se precachean al instalar.
 const PRECACHE = [
