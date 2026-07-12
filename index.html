@@ -677,6 +677,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <div class="ov-head">
     <button class="icon-btn" onclick="pzBack()">←</button>
     <h2 id="pzTitle">Ejercicio</h2>
+    <button class="icon-btn" onclick="pzPdf()" title="PDF">📄</button>
     <button class="icon-btn" onclick="pzSave()" title="Guardar">💾</button>
   </div>
 
@@ -750,6 +751,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <div class="ov-head">
     <button class="icon-btn" onclick="sesBack()">←</button>
     <h2 id="sesTitle">Sesión</h2>
+    <button class="icon-btn" onclick="sesPdfCur()" title="PDF">📄</button>
     <button class="icon-btn" onclick="sesSave()" title="Guardar">💾</button>
   </div>
   <label>Nombre *</label><input id="sesNombre" placeholder="Ej: Martes — técnica y finalización" autocomplete="off">
@@ -3872,6 +3874,7 @@ function exCardHtml(t, e){
       '<div class="t-sub">' + (parts.map(esc).join(' · ') || 'sin datos de carga') + '</div>' +
     '</button>' +
     '<div class="t-act">' +
+      '<button onclick="exPdf(\'' + e.id + '\')" title="PDF">📄</button>' +
       '<button onclick="exDuplicate(\'' + e.id + '\')" title="Duplicar">⧉</button>' +
       '<button onclick="exDelete(\'' + e.id + '\')" title="Borrar">🗑</button>' +
     '</div></div>';
@@ -4316,8 +4319,10 @@ function pzStop(){
 
 /* --- exportar video (WebM con MediaRecorder, Etapa 14) --- */
 const PZ_SHIRT_PATH = 'M-2.5,-1.5 L-0.9,-1.9 Q0,-2.15 0.9,-1.9 L2.5,-1.5 L2,0.8 L1.4,0.6 L1.4,3.1 L-1.4,3.1 L-1.4,0.6 L-2,0.8 Z';
-// Dibuja la pizarra completa en un canvas (misma escena que el SVG)
-function pzCanvasDraw(ctx, W, pos){
+// Dibuja la pizarra completa en un canvas (misma escena que el SVG).
+// board opcional: por defecto usa el ejercicio abierto en el editor.
+function pzCanvasDraw(ctx, W, pos, board){
+  const b = board || pz.board;
   const k = W / 68;
   ctx.save();
   ctx.setTransform(k, 0, 0, k, 0, 0);
@@ -4331,7 +4336,7 @@ function pzCanvasDraw(ctx, W, pos){
   [[34, 52.5], [34, 13], [34, 92]].forEach(c => { ctx.beginPath(); ctx.arc(c[0], c[1], .7, 0, 7); ctx.fill(); });
   ctx.strokeRect(13.84, 2, 40.32, 16.5); ctx.strokeRect(24.84, 2, 18.32, 5.5);
   ctx.strokeRect(13.84, 86.5, 40.32, 16.5); ctx.strokeRect(24.84, 97.5, 18.32, 5.5);
-  pz.board.zones.forEach(z => {
+  b.zones.forEach(z => {
     const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
     ctx.beginPath();
     if (z.shape === 'circle') ctx.ellipse(z.x + z.w / 2, z.y + z.h / 2, z.w / 2, z.h / 2, 0, 0, 7);
@@ -4341,7 +4346,7 @@ function pzCanvasDraw(ctx, W, pos){
     ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.setLineDash([1.6, 1]); ctx.stroke(); ctx.setLineDash([]);
   });
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  pz.board.tokens.forEach(t => {
+  b.tokens.forEach(t => {
     const p = pos[t.id] || t;
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -4349,7 +4354,7 @@ function pzCanvasDraw(ctx, W, pos){
       ctx.beginPath(); ctx.arc(0, 0, 2, 0, 7); ctx.fillStyle = '#fff'; ctx.fill();
       ctx.lineWidth = .2; ctx.strokeStyle = '#0f172a'; ctx.stroke();
       ctx.font = '3.1px sans-serif'; ctx.fillStyle = '#0f172a'; ctx.fillText('⚽', 0, .15);
-    } else if (pz.board.view === 'figs'){
+    } else if (b.view === 'figs'){
       ctx.beginPath(); ctx.arc(0, -2.9, 1.35, 0, 7); ctx.fillStyle = '#eab188'; ctx.fill();
       const shirt = new Path2D(PZ_SHIRT_PATH);
       ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill(shirt);
@@ -4537,6 +4542,7 @@ function renderSesList(t){
         '<div class="t-name">🗓 ' + esc(s.nombre) + '</div>' +
         '<div class="t-sub">' + parts.map(esc).join(' · ') + '</div></button>' +
       '<div class="t-act">' +
+        '<button onclick="sesPdf(\'' + s.id + '\')" title="PDF">📄</button>' +
         '<button onclick="sesDuplicate(\'' + s.id + '\')" title="Duplicar">⧉</button>' +
         '<button onclick="sesDelete(\'' + s.id + '\')" title="Borrar">🗑</button>' +
       '</div></div>';
@@ -5146,6 +5152,215 @@ function exportPlayerPdf(){
   doc.save(fn);
   _pdfDoc = null;
   toast('Informe PDF descargado');
+}
+
+/* ── PDF de ejercicio y de sesión (pizarra) ── */
+const DIAS_LARGOS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+function exFrame0Pos(e){
+  if (e.board && e.board.frames && e.board.frames[0] && e.board.frames[0].pos) return e.board.frames[0].pos;
+  const o = {};
+  ((e.board && e.board.tokens) || []).forEach(t => { o[t.id] = { x:t.x, y:t.y }; });
+  return o;
+}
+function pzBoardPng(board, pos, W){
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = Math.round(W * 105 / 68);
+  pzCanvasDraw(cv.getContext('2d'), W, pos, board);
+  return cv.toDataURL('image/png');
+}
+function pzDensTxt(c){
+  const w = Number(c && c.pasada), r = Number(c && c.descanso);
+  if (!(w > 0 && r > 0)) return '';
+  const gcd = (a, b) => b ? gcd(b, a % b) : a;
+  const g = gcd(Math.round(w), Math.round(r));
+  return Math.round(w) / g + ' : ' + Math.round(r) / g;
+}
+// Encabezado común (tipo + nombre + línea gris + fecha de generación)
+function _pdfHead(tipo, nombre, subLinea){
+  _pt('bold', 8, PC_ACC);
+  _pdfDoc.text(tipo, PDF_M, _pdfY);
+  _pdfY += 6.5;
+  _pt('bold', 20, PC_INK);
+  _pdfDoc.text(String(nombre), PDF_M, _pdfY);
+  _pdfY += 6.5;
+  if (subLinea){
+    _pt('normal', 10.5, PC_MUT);
+    _pdfDoc.text(subLinea, PDF_M, _pdfY);
+    _pdfY += 4.6;
+  }
+  _pt('normal', 8.5, PC_MUT);
+  _pdfDoc.text('Generado el ' + fmtFecha(todayISO()), PDF_M, _pdfY);
+  _pdfY += 4;
+  _ps(PC_BOR); _pdfDoc.setLineWidth(0.5);
+  _pdfDoc.line(PDF_M, _pdfY, PDF_W - PDF_M, _pdfY);
+  _pdfY += 2;
+}
+function _pdfFoot(doc){
+  const np = doc.getNumberOfPages();
+  for (let i = 1; i <= np; i++){
+    doc.setPage(i);
+    _ps(PC_BOR); _pdfDoc.setLineWidth(0.3);
+    doc.line(PDF_M, PDF_H - 12, PDF_W - PDF_M, PDF_H - 12);
+    _pt('normal', 7.5, PC_MUT);
+    doc.text('Generado con PruevaCero · ' + fmtFecha(todayISO()), PDF_M, PDF_H - 8);
+    doc.text('Página ' + i + ' de ' + np, PDF_W - PDF_M, PDF_H - 8, { align:'right' });
+  }
+}
+// Dibujo del ejercicio dentro del PDF: 1 paso grande o secuencia de pasos
+function _pdfBoardSeq(e){
+  const frames = (e.board && e.board.frames && e.board.frames.length) ? e.board.frames : [{ pos:exFrame0Pos(e) }];
+  try {
+    if (frames.length === 1){
+      const iw = 76, ih = Math.round(iw * 105 / 68);
+      _pdfBreak(ih + 4);
+      _pdfDoc.addImage(pzBoardPng(e.board, frames[0].pos, 408), 'PNG', (PDF_W - iw) / 2, _pdfY, iw, ih);
+      _pdfY += ih + 5;
+      return;
+    }
+    const show = frames.slice(0, 8), perRow = 4, gap = 4;
+    const iw = (PDF_CW - gap * (perRow - 1)) / perRow, ih = Math.round(iw * 105 / 68);
+    for (let i = 0; i < show.length; i += perRow){
+      _pdfBreak(ih + 10);
+      const row = show.slice(i, i + perRow);
+      row.forEach((f, j) => {
+        const x = PDF_M + j * (iw + gap);
+        _pdfDoc.addImage(pzBoardPng(e.board, f.pos, 272), 'PNG', x, _pdfY, iw, ih);
+        _pt('bold', 7.5, PC_MUT);
+        _pdfDoc.text('PASO ' + (i + j + 1), x + iw / 2, _pdfY + ih + 4, { align:'center' });
+      });
+      _pdfY += ih + 8;
+    }
+    if (frames.length > 8) _pdfPara('(la animación completa tiene ' + frames.length + ' pasos; acá se muestran los primeros 8)', 8, PC_MUT);
+  } catch(err){}
+}
+// Cuerpo del ejercicio (sin encabezado ni pie): lo comparten ambos PDF
+function _pdfExerciseBody(e, t){
+  _pdfBoardSeq(e);
+  const c = e.carga || {}, pl = e.plan || {};
+  if (c.dur || c.series || c.reps || c.pasada || c.descanso || c.intensidad){
+    _pdfTitle('Dosificación de la carga');
+    _pdfDataGrid([
+      ['Duración total', c.dur ? c.dur + ' min' : ''],
+      ['Series × repeticiones', (c.series || c.reps) ? (c.series || '—') + ' × ' + (c.reps || '—') : ''],
+      ['Tiempo de pasada', c.pasada ? c.pasada + ' seg' : ''],
+      ['Descanso entre pasadas', c.descanso ? c.descanso + ' seg' : ''],
+      ['Intensidad', c.intensidad ? (INTENSIDADES[c.intensidad] || c.intensidad) : ''],
+      ['Densidad (trabajo : descanso)', pzDensTxt(c)]
+    ]);
+  }
+  if (pl.dia != null || pl.micro || pl.etapa){
+    _pdfTitle('Planificación');
+    _pdfDataGrid([
+      ['Día de la semana', pl.dia != null ? DIAS_LARGOS[pl.dia] : ''],
+      ['Microciclo', pl.micro || ''],
+      ['Etapa', pl.etapa ? (ETAPAS_CARGA[pl.etapa] || pl.etapa) : '']
+    ]);
+  }
+  if (e.descripcion){
+    _pdfTitle('Descripción');
+    _pdfPara(e.descripcion, 10, PC_INK);
+  }
+  if (e.materiales){
+    _pdfTitle('Materiales');
+    _pdfPara(e.materiales, 10, PC_INK);
+  }
+  const parts = (e.jugadores || []).map(pid => {
+    const p = S.players.find(x => x.id === pid);
+    return p ? (p.nombre + ' ' + (p.apellido || '')).trim() : null;
+  }).filter(Boolean);
+  if (parts.length){
+    _pdfTitle('Participantes (' + parts.length + ')');
+    _pdfPara(parts.join(' · '), 10, PC_INK);
+  }
+}
+function exportExercisePdf(e){
+  if (!e || !_pdfOk()) return;
+  const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
+  _pdfDoc = doc; _pdfY = 16;
+  const t = S.teams.find(x => x.id === e.teamId);
+  const cat = e.categoria && t ? teamCats(t).find(x => x.id === e.categoria) : null;
+  _pdfHead('EJERCICIO DE ENTRENAMIENTO', e.nombre || 'Ejercicio',
+    [t ? t.nombre : '', cat ? 'Categoría ' + cat.nombre : ''].filter(Boolean).join('   ·   '));
+  _pdfExerciseBody(e, t);
+  _pdfFoot(doc);
+  doc.save('ejercicio-' + _slug(e.nombre || 'pizarra') + '-' + todayISO() + '.pdf');
+  _pdfDoc = null;
+  toast('PDF del ejercicio descargado');
+}
+function exPdf(id){
+  const e = S.exercises.find(x => x.id === id);
+  if (e) exportExercisePdf(e);
+}
+function pzPdf(){
+  if (!pz) return;
+  pzCollect();
+  exportExercisePdf(pz);
+}
+function exportSesionPdf(s){
+  if (!s || !_pdfOk()) return;
+  const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
+  _pdfDoc = doc; _pdfY = 16;
+  const t = S.teams.find(x => x.id === s.teamId);
+  const cat = s.categoria && t ? teamCats(t).find(x => x.id === s.categoria) : null;
+  const tot = sesTotalMin(s);
+  _pdfHead('SESIÓN DE ENTRENAMIENTO', s.nombre || 'Sesión',
+    [t ? t.nombre : '', cat ? 'Categoría ' + cat.nombre : '', s.fecha ? fmtFecha(s.fecha) : '',
+     tot ? tot + ' min en total' : ''].filter(Boolean).join('   ·   '));
+  SES_TIPOS.forEach(tp => {
+    const items = (s.bloques || []).filter(b => b.tipo === tp[0]);
+    if (!items.length) return;
+    const sub = items.reduce((m, it) => m + sesItemMin(it), 0);
+    _pdfTitle(tp[1].replace(/^\S+\s/, '') + (sub ? '  ·  ' + sub + ' min' : ''));   // sin emoji
+    items.forEach(it => {
+      const e = it.exId ? S.exercises.find(x => x.id === it.exId) : null;
+      const ih = e ? 26 : 7;
+      _pdfBreak(ih + 4);
+      const y0 = _pdfY;
+      if (e){
+        try { _pdfDoc.addImage(pzBoardPng(e.board, exFrame0Pos(e), 204), 'PNG', PDF_M, y0 - 4, 17, 26); } catch(err){}
+      }
+      const tx = PDF_M + (e ? 21 : 5);
+      if (!e){ _pf(PC_ACC); _pdfDoc.circle(PDF_M + 1.4, y0 - 1.1, 1.1, 'F'); }
+      _pt('bold', 10.5, PC_INK);
+      _pdfDoc.text(sesItemTitle(it), tx, y0);
+      const m = sesItemMin(it);
+      if (m){ _pt('bold', 9.5, PC_ACC); _pdfDoc.text(m + ' min', PDF_W - PDF_M, y0, { align:'right' }); }
+      if (e && e.descripcion){
+        const lines = _pdfDoc.splitTextToSize(String(e.descripcion), PDF_CW - 50).slice(0, 3);
+        _pt('normal', 8.5, PC_MUT);
+        lines.forEach((ln, i) => { _pdfDoc.text(ln, tx, y0 + 5 + i * 4.2); });
+      }
+      _pdfY = y0 + ih;
+    });
+  });
+  // materiales juntos de todos los ejercicios de la sesión
+  const mats = [];
+  (s.bloques || []).forEach(it => {
+    const e = it.exId ? S.exercises.find(x => x.id === it.exId) : null;
+    if (e && e.materiales) mats.push(e.materiales);
+  });
+  if (mats.length){
+    _pdfTitle('Materiales');
+    _pdfPara(mats.join(' · '), 10, PC_INK);
+  }
+  if (s.notas){
+    _pdfTitle('Notas');
+    _pdfPara(s.notas, 10, PC_INK);
+  }
+  _pdfFoot(doc);
+  doc.save('sesion-' + _slug(s.nombre || 'entrenamiento') + '-' + (s.fecha || todayISO()) + '.pdf');
+  _pdfDoc = null;
+  toast('PDF de la sesión descargado');
+}
+function sesPdf(id){
+  const s = S.trainSessions.find(x => x.id === id);
+  if (s) exportSesionPdf(s);
+}
+function sesPdfCur(){
+  if (!ses) return;
+  sesCollect();
+  exportSesionPdf(ses);
 }
 
 /* ═══════════════════════════════════════════════════════════════════

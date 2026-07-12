@@ -68,7 +68,7 @@ grep -n "===== js/" index.html
 | `js/cats.js` | categorías por rango de años (`playerCat`, `catLabelFor`) + días/hora de clase |
 | `js/players.js` | lista con filtros, ficha (`openFicha` arma TODAS las tarjetas), form, mover/exportar/importar jugador |
 | `js/goals.js` | lesiones (`p.lesiones`) y objetivos (`p.objetivos`) en la ficha: `renderLesionesCard`/`renderObjetivosCard`, alta/borrar/cumplir |
-| `js/pdf.js` | informe PDF del jugador (`exportPlayerPdf`, jsPDF): datos, foto, pruebas, partidos, asistencia, radar rasterizado, lesiones, objetivos |
+| `js/pdf.js` | informes PDF (jsPDF): jugador (`exportPlayerPdf`), ejercicio (`exportExercisePdf`, cancha rasterizada con `pzBoardPng`, secuencia de pasos) y sesión (`exportSesionPdf`, bloques con miniaturas). Sin emojis dentro del PDF |
 | `js/tests.js` | creador de pruebas + jornadas + evolución (`renderEvolution`) |
 | `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
 | `js/groups.js` | Grupos de rendimiento (botón en Pruebas, overlay `ovGrupos`): 3 grupos DERIVADOS de la última marca, modo auto (tercios) o umbral (cortes en `testDef.grupos`); colores/nombres en `S.grupos`; benchmarking por posición, subió/bajó, armar equipos parejos |
