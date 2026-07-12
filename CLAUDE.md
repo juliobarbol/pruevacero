@@ -75,6 +75,7 @@ grep -n "===== js/" index.html
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
 | `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
+| `js/board.js` | pestaña 📋 Pizarra: ejercicios de entrenamiento en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota) y zonas arrastrables por pointer events, vista chapitas/figuras, ficha del ejercicio (materiales, participantes, dosificación, periodización) |
 | `js/backup.js` | backup JSON completo (incluye fotos) |
 | `js/export.js` | Excel con autofiltro (jugadores / estadísticas / jornada) |
 | `js/stats.js` | agregados (`aggFor`), tabla comparativa, resúmenes de ficha |
@@ -138,23 +139,17 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 
 ## PENDIENTE (próximas sesiones)
 
-**Pedido por Julio el 2026-07-08 (ANOTADO para hacer en otra sesión, con
-diagnóstico ya hecho — ver "PENDIENTES — próxima sesión" en `PLAN.md`):**
-1. Mover el botón ⚙️ Config al header (donde está 🌙) y dejar el toggle de tema
-   solo dentro de la pestaña Config (ojo: `applyTheme` toca `#themeBtn`, guardar
-   contra null si se elimina).
-2. **Bug del lápiz ✏️ de editar**: `ovPlayerForm` está en el DOM antes que
-   `ovFicha` con igual `z-index:30`, y `openPlayerForm` no cierra la ficha → el
-   form queda tapado; al volver atrás aparece. Arreglo: que `openOverlay` suba
-   el overlay abierto (o subir z-index / reordenar `ovPlayerForm`).
-3. **Instalable**: manifest + íconos + SW ya OK (Chrome/Android instala desde el
-   menú). Falta botón "Instalar" con `beforeinstallprompt` y metas iOS
-   (`apple-mobile-web-app-capable` + ayuda "Agregar a inicio").
+Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-12 están HECHAS
+las etapas 0–12 (incluye crono, grupos de rendimiento, Config al header,
+bug del lápiz, PWA instalable y la **pizarra táctica base**). Falta:
 
-Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-08 **todas las
-etapas del plan (0–10) + el cronómetro grupal + los grupos de rendimiento
-están HECHAS.** Quedan las 3 tareas de arriba (pedidas por Julio) y estas
-ideas menores / oportunidades (ninguna pedida por Julio todavía):
+1. **Etapa 13 — Pizarra: animación**: pasos clave (fotogramas) + Play con
+   movimiento suave. El `board` del ejercicio ya está pensado como
+   "fotograma 0" (ver sección Pizarra táctica de `PLAN.md`).
+2. **Etapa 14 — Pizarra: exportar video** WebM con `MediaRecorder` +
+   duplicar ejercicio + vínculo con el calendario de clases.
+
+Ideas menores / oportunidades (ninguna pedida por Julio todavía):
 
 - Los exportes Excel/PDF necesitan internet la PRIMERA vez (CDN); después
   quedan cacheados por el SW.

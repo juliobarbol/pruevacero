@@ -309,6 +309,12 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 .gr-swatch{display:inline-flex;align-items:center;gap:8px;margin:6px 0}
 .gr-swatch input[type=color]{width:44px;height:38px;padding:2px;flex:none}
 
+/* ============================ PIZARRA TÁCTICA ============================ */
+.pz-tools{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+.pz-pitchwrap{border-radius:14px;overflow:hidden;border:1px solid var(--border);margin-top:10px;line-height:0}
+#pzSvg{width:100%;height:auto;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+.pz-h3{font-size:15.5px;margin:18px 0 2px}
+
 @media(min-width:700px){
   main,.overlay{max-width:640px;margin:0 auto}
   header{padding-left:calc(50% - 306px);padding-right:calc(50% - 306px)}
@@ -355,6 +361,11 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
   <section class="tab" id="tab-stats">
     <div id="statsContent"></div>
+  </section>
+
+  <!-- ══════════════ PESTAÑA PIZARRA TÁCTICA ══════════════ -->
+  <section class="tab" id="tab-pizarra">
+    <div id="pizarraContent"></div>
   </section>
 
   <!-- ══════════════ PESTAÑA CONFIG ══════════════ -->
@@ -419,6 +430,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <button id="nav-crono" onclick="switchTab('crono')"><span class="ic">⏱️</span>Crono</button>
   <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
   <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Clases</button>
+  <button id="nav-pizarra" onclick="switchTab('pizarra')"><span class="ic">📋</span>Pizarra</button>
   <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
 </nav>
 
@@ -660,6 +672,64 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   cargados no se borran: se archivan.</p>
 </div>
 
+<!-- ══════════════ OVERLAY EJERCICIO (PIZARRA TÁCTICA) ══════════════ -->
+<div class="overlay" id="ovBoard">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="pzBack()">←</button>
+    <h2 id="pzTitle">Ejercicio</h2>
+    <button class="icon-btn" onclick="pzSave()" title="Guardar">💾</button>
+  </div>
+
+  <div class="pz-tools" id="pzTools"></div>
+  <div class="pz-pitchwrap"><svg id="pzSvg" viewBox="0 0 68 105" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <p class="hint" style="margin-top:8px">Tocá una ficha o zona para seleccionarla y
+  arrastrala para moverla. Con una zona seleccionada: arrastrá el cuadradito blanco
+  de la esquina para cambiar el tamaño y usá 🎨 para el color.</p>
+
+  <h3 class="pz-h3">📝 Datos del ejercicio</h3>
+  <label>Nombre *</label><input id="pzNombre" placeholder="Ej: Rondo 4 vs 2" autocomplete="off">
+  <label>Descripción</label><textarea id="pzDesc" rows="3" placeholder="Cómo se juega, reglas, variantes…"></textarea>
+  <label>Materiales</label><textarea id="pzMat" rows="2" placeholder="Conos, pecheras, pelotas…"></textarea>
+
+  <h3 class="pz-h3">👥 Participantes</h3>
+  <label>Categoría</label><select id="pzCat" onchange="pzRenderPlayers()"></select>
+  <label>Jugadores que participan</label>
+  <div class="chips" id="pzPlayers" style="flex-wrap:wrap"></div>
+
+  <h3 class="pz-h3">⏱️ Dosificación de la carga</h3>
+  <div class="form-grid">
+    <div><label>Duración total (min)</label><input id="pzDur" type="number" inputmode="numeric" min="0"></div>
+    <div><label>Series</label><input id="pzSeries" type="number" inputmode="numeric" min="0"></div>
+    <div><label>Repeticiones</label><input id="pzReps" type="number" inputmode="numeric" min="0"></div>
+    <div><label>Intensidad</label>
+      <select id="pzInt">
+        <option value="">—</option><option value="baja">Baja</option>
+        <option value="media">Media</option><option value="alta">Alta</option>
+        <option value="maxima">Máxima</option>
+      </select></div>
+    <div><label>Tiempo de pasada (seg)</label><input id="pzPasada" type="number" inputmode="numeric" min="0" oninput="pzDensCalc()"></div>
+    <div><label>Descanso entre pasadas (seg)</label><input id="pzDescanso" type="number" inputmode="numeric" min="0" oninput="pzDensCalc()"></div>
+  </div>
+  <p class="hint" id="pzDens" style="margin-top:8px"></p>
+
+  <h3 class="pz-h3">📅 Planificación</h3>
+  <label>Día de la semana</label>
+  <div class="chips" id="pzDias"></div>
+  <label>Microciclo</label><input id="pzMicro" placeholder="Ej: Microciclo 3 — semana del 14/07" autocomplete="off">
+  <label>Etapa del entrenamiento</label>
+  <select id="pzEtapa">
+    <option value="">—</option>
+    <option value="acumulacion">Acumulación</option>
+    <option value="transformacion">Transformación</option>
+    <option value="realizacion">Realización</option>
+  </select>
+
+  <div class="btn-row">
+    <button class="btn sec" onclick="pzBack()">Cancelar</button>
+    <button class="btn" onclick="pzSave()">💾 Guardar</button>
+  </div>
+</div>
+
 <!-- ══════════════ MODAL confirm/prompt ══════════════ -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -751,12 +821,13 @@ function loadData(){
         d.evaluations  = d.evaluations  || [];
         d.evalAspects  = d.evalAspects  || DEF_ASPECTS.slice();
         d.grupos       = d.grupos       || DEF_GRUPOS.map(g => Object.assign({}, g));
+        d.exercises    = d.exercises    || [];
         return d;
       }
     }
   } catch(e){}
   return { v:1, teams:[], players:[], testDefs:DEF_TESTDEFS.slice(), testSessions:[], matches:[], attendance:[],
-           evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)) };
+           evaluations:[], evalAspects:DEF_ASPECTS.slice(), grupos:DEF_GRUPOS.map(g => Object.assign({}, g)), exercises:[] };
 }
 function loadUI(){
   try { const raw = localStorage.getItem(LS.UI); if (raw) return JSON.parse(raw) || {}; } catch(e){}
@@ -1043,6 +1114,7 @@ function switchTab(t){
   if (t === 'partidos') renderPartidos();
   if (t === 'stats') renderStats();
   if (t === 'clases') renderClases();
+  if (t === 'pizarra') renderPizarra();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){
@@ -1113,12 +1185,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra(); renderTeams();
   closeOverlay('ovTeams');
   switchTab('jugadores');
 }
@@ -1144,7 +1216,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1242,6 +1314,7 @@ async function catDelete(id){
   if (!ok) return;
   t.categorias = t.categorias.filter(x => x.id !== id);
   S.matches.forEach(m => { if (m.teamId === t.id && m.categoria === id) m.categoria = null; });
+  S.exercises.forEach(e => { if (e.teamId === t.id && e.categoria === id) e.categoria = null; });
   if (jugCat === id) jugCat = '';
   saveData();
   renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
@@ -3655,6 +3728,388 @@ async function objetivoDelete(i){
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/board.js ===== Pizarra táctica: ejercicios de entrenamiento
+   ═══════════════════════════════════════════════════════════════════ */
+// exercise = { id, teamId, creado, nombre, descripcion, materiales,
+//   categoria (catId|null), jugadores:[playerId],
+//   carga:{ dur, series, reps, pasada, descanso, intensidad },
+//   plan:{ dia (0-6|null), micro, etapa },
+//   board:{ view:'chips'|'figs', tokens:[{id,kind:'A'|'B'|'ball',num,x,y}],
+//           zones:[{id,shape:'rect'|'circle'|'tri',x,y,w,h,color}] } }
+// Coordenadas en unidades del viewBox de la cancha (68 × 105, como una cancha real en m).
+const PZ_ZONE_COLORS = ['#facc15', '#38bdf8', '#f87171', '#f8fafc'];
+const PZ_TEAM_COLORS = { A:'#ef4444', B:'#3b82f6' };
+const ETAPAS_CARGA = { acumulacion:'Acumulación', transformacion:'Transformación', realizacion:'Realización' };
+const INTENSIDADES = { baja:'Baja', media:'Media', alta:'Alta', maxima:'Máxima' };
+
+let pz = null;         // copia de trabajo del ejercicio abierto en el editor
+let pzSnap = '';       // snapshot para detectar cambios sin guardar
+let pzSel = null;      // selección en la cancha: {type:'tok'|'zone', id}
+let pzDrag = null;     // arrastre en curso
+
+/* --- pestaña: lista de ejercicios --- */
+function exercisesOf(teamId){ return S.exercises.filter(e => e.teamId === teamId); }
+
+function renderPizarra(){
+  const box = document.getElementById('pizarraContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){
+    box.innerHTML = '<div class="empty"><div class="big">📋</div>Creá un equipo para empezar<br>a armar ejercicios en la pizarra.</div>';
+    return;
+  }
+  const exs = exercisesOf(t.id).slice().sort((a, b) => String(b.creado || '').localeCompare(String(a.creado || '')));
+  let h = '<button class="btn" onclick="pzNew()">➕ Nuevo ejercicio</button>';
+  if (!exs.length){
+    h += '<div class="empty"><div class="big">📋</div>Todavía no hay ejercicios.<br>Armá el primero: cancha, dos equipos,<br>pelota, zonas y toda la dosificación.</div>';
+  } else {
+    h += '<div style="margin-top:12px">' + exs.map(e => exCardHtml(t, e)).join('') + '</div>';
+  }
+  box.innerHTML = h;
+}
+function exCardHtml(t, e){
+  const parts = [];
+  const c = e.carga || {}, pl = e.plan || {};
+  if (c.dur) parts.push('⏱ ' + c.dur + ' min');
+  if (c.series) parts.push(c.series + '×' + (c.reps || 1));
+  if (c.intensidad) parts.push('int. ' + (INTENSIDADES[c.intensidad] || c.intensidad).toLowerCase());
+  if (pl.dia != null) parts.push(DIAS_CORTOS[pl.dia]);
+  if (pl.etapa) parts.push(ETAPAS_CARGA[pl.etapa] || pl.etapa);
+  const cat = e.categoria ? teamCats(t).find(x => x.id === e.categoria) : null;
+  if (cat) parts.push(cat.nombre);
+  if ((e.jugadores || []).length) parts.push(e.jugadores.length + ' jugador' + (e.jugadores.length === 1 ? '' : 'es'));
+  return '<div class="team-item">' +
+    '<button class="t-main" onclick="pzOpen(\'' + e.id + '\')">' +
+      '<div class="t-name">📋 ' + esc(e.nombre) + '</div>' +
+      '<div class="t-sub">' + (parts.map(esc).join(' · ') || 'sin datos de carga') + '</div>' +
+    '</button>' +
+    '<div class="t-act"><button onclick="exDelete(\'' + e.id + '\')" title="Borrar">🗑</button></div></div>';
+}
+async function exDelete(id){
+  const e = S.exercises.find(x => x.id === id);
+  if (!e) return;
+  const ok = await appConfirm('Borrar ejercicio', '¿Borrar "' + e.nombre + '"? Esta acción no se puede deshacer.', { okLabel:'Borrar', danger:true });
+  if (!ok) return;
+  S.exercises = S.exercises.filter(x => x.id !== id);
+  saveData();
+  renderPizarra();
+}
+
+/* --- abrir / crear en el editor --- */
+function pzBlank(t){
+  const toks = [];
+  const xs = [12, 23, 34, 45, 56];
+  xs.forEach((x, i) => toks.push({ id:uid(), kind:'A', num:i + 1, x, y:24 }));
+  xs.forEach((x, i) => toks.push({ id:uid(), kind:'B', num:i + 1, x, y:81 }));
+  toks.push({ id:uid(), kind:'ball', num:0, x:34, y:52.5 });
+  return {
+    id:uid(), teamId:t.id, creado:todayISO(),
+    nombre:'', descripcion:'', materiales:'',
+    categoria:null, jugadores:[],
+    carga:{ dur:null, series:null, reps:null, pasada:null, descanso:null, intensidad:'' },
+    plan:{ dia:null, micro:'', etapa:'' },
+    board:{ view:'chips', tokens:toks, zones:[] }
+  };
+}
+function pzNew(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  pz = pzBlank(t);
+  pzSel = null;
+  pzOpenUI('Nuevo ejercicio');
+}
+function pzOpen(id){
+  const e = S.exercises.find(x => x.id === id);
+  if (!e) return;
+  pz = JSON.parse(JSON.stringify(e));
+  pz.jugadores = pz.jugadores || [];
+  pz.carga = pz.carga || {};
+  pz.plan = pz.plan || {};
+  pz.board = pz.board || { view:'chips', tokens:[], zones:[] };
+  pz.board.tokens = pz.board.tokens || [];
+  pz.board.zones = pz.board.zones || [];
+  pzSel = null;
+  pzOpenUI('Ejercicio');
+}
+function pzOpenUI(title){
+  const setv = (id, v) => { document.getElementById(id).value = (v == null ? '' : v); };
+  document.getElementById('pzTitle').textContent = title;
+  setv('pzNombre', pz.nombre);
+  setv('pzDesc', pz.descripcion);
+  setv('pzMat', pz.materiales);
+  const c = pz.carga;
+  setv('pzDur', c.dur); setv('pzSeries', c.series); setv('pzReps', c.reps);
+  setv('pzPasada', c.pasada); setv('pzDescanso', c.descanso);
+  document.getElementById('pzInt').value = c.intensidad || '';
+  setv('pzMicro', pz.plan.micro);
+  document.getElementById('pzEtapa').value = pz.plan.etapa || '';
+  pzRenderCatSel(); pzRenderPlayers(); pzRenderDias(); pzDensCalc();
+  pzRenderTools(); pzRenderBoard();
+  pzCollect();
+  pzSnap = JSON.stringify(pz);
+  openOverlay('ovBoard');
+}
+// Junta lo que está en los campos del formulario dentro de pz
+function pzCollect(){
+  if (!pz) return;
+  const num = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  pz.nombre = document.getElementById('pzNombre').value.trim();
+  pz.descripcion = document.getElementById('pzDesc').value.trim();
+  pz.materiales = document.getElementById('pzMat').value.trim();
+  pz.categoria = document.getElementById('pzCat').value || null;
+  pz.carga = { dur:num('pzDur'), series:num('pzSeries'), reps:num('pzReps'),
+               pasada:num('pzPasada'), descanso:num('pzDescanso'),
+               intensidad:document.getElementById('pzInt').value };
+  pz.plan.micro = document.getElementById('pzMicro').value.trim();
+  pz.plan.etapa = document.getElementById('pzEtapa').value;
+}
+function pzSave(){
+  if (!pz) return;
+  pzCollect();
+  if (!pz.nombre){ toast('Ponele un nombre al ejercicio', true); return; }
+  const ix = S.exercises.findIndex(x => x.id === pz.id);
+  if (ix >= 0) S.exercises[ix] = pz; else S.exercises.push(pz);
+  saveData();
+  pzSnap = JSON.stringify(pz);
+  closeOverlay('ovBoard');
+  renderPizarra();
+  toast('Ejercicio guardado');
+}
+async function pzBack(){
+  if (pz){
+    pzCollect();
+    if (JSON.stringify(pz) !== pzSnap){
+      const ok = await appConfirm('Salir sin guardar', 'Hay cambios sin guardar en el ejercicio. ¿Salir igual?', { okLabel:'Salir', danger:true });
+      if (!ok) return;
+    }
+  }
+  closeOverlay('ovBoard');
+}
+
+/* --- participantes --- */
+function pzRenderCatSel(){
+  const tm = S.teams.find(x => x.id === pz.teamId);
+  document.getElementById('pzCat').innerHTML =
+    '<option value="">Todas / sin especificar</option>' +
+    teamCats(tm).map(c => '<option value="' + c.id + '"' + (pz.categoria === c.id ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('');
+}
+function pzRenderPlayers(){
+  const tm = S.teams.find(x => x.id === pz.teamId);
+  const catId = document.getElementById('pzCat').value;
+  const pls = teamPlayers(pz.teamId).filter(p => {
+    if (pz.jugadores.includes(p.id)) return true;   // los ya elegidos no se ocultan
+    if (!catId) return true;
+    const c = playerCat(tm, p);
+    return !!c && c.id === catId;
+  }).sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  document.getElementById('pzPlayers').innerHTML = pls.length ? pls.map(p =>
+    '<button class="chip' + (pz.jugadores.includes(p.id) ? ' on' : '') + '" onclick="pzTogglePlayer(\'' + p.id + '\')">' +
+    esc(p.nombre + ' ' + (p.apellido || '')).trim() + '</button>').join('')
+    : '<p class="hint">No hay jugadores' + (catId ? ' en esa categoría' : ' cargados en el equipo') + '.</p>';
+}
+function pzTogglePlayer(id){
+  const ix = pz.jugadores.indexOf(id);
+  if (ix >= 0) pz.jugadores.splice(ix, 1); else pz.jugadores.push(id);
+  pzRenderPlayers();
+}
+
+/* --- dosificación / planificación --- */
+function pzDensCalc(){
+  const w = Number(document.getElementById('pzPasada').value);
+  const r = Number(document.getElementById('pzDescanso').value);
+  const el = document.getElementById('pzDens');
+  if (w > 0 && r > 0){
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const g = gcd(Math.round(w), Math.round(r));
+    el.textContent = '📈 Densidad (trabajo : descanso) = ' + Math.round(w) / g + ' : ' + Math.round(r) / g +
+      (w >= r ? ' — más trabajo que pausa' : ' — más pausa que trabajo');
+  } else {
+    el.textContent = 'Densidad: cargá el tiempo de pasada y el descanso para calcularla sola.';
+  }
+}
+function pzRenderDias(){
+  document.getElementById('pzDias').innerHTML = DIAS_CORTOS.map((d, i) =>
+    '<button class="chip' + (pz.plan.dia === i ? ' on' : '') + '" onclick="pzSetDia(' + i + ')">' + d + '</button>').join('');
+}
+function pzSetDia(i){
+  pz.plan.dia = (pz.plan.dia === i) ? null : i;
+  pzRenderDias();
+}
+
+/* --- barra de herramientas de la cancha --- */
+function pzRenderTools(){
+  const selTok = pzSel && pzSel.type === 'tok';
+  const selZone = pzSel && pzSel.type === 'zone';
+  let h = '<button class="chip" onclick="pzAddTok(\'A\')">➕ 🔴 rojo</button>' +
+          '<button class="chip" onclick="pzAddTok(\'B\')">➕ 🔵 azul</button>' +
+          '<button class="chip" onclick="pzAddTok(\'ball\')">➕ ⚽</button>' +
+          '<button class="chip" onclick="pzAddZone(\'rect\', true)">➕ ◻ zona</button>' +
+          '<button class="chip" onclick="pzAddZone(\'rect\')">➕ ▭ zona</button>' +
+          '<button class="chip" onclick="pzAddZone(\'circle\')">➕ ⬯ zona</button>' +
+          '<button class="chip" onclick="pzAddZone(\'tri\')">➕ △ zona</button>' +
+          '<button class="chip on" onclick="pzToggleView()">' + (pz.board.view === 'chips' ? '🏃 Ver figuras' : '⬤ Ver chapitas') + '</button>';
+  if (selZone) h += '<button class="chip" onclick="pzZoneColor()">🎨 Color</button>';
+  if (selTok || selZone) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelSel()">🗑 Borrar</button>';
+  document.getElementById('pzTools').innerHTML = h;
+}
+function pzAddTok(kind){
+  const b = pz.board;
+  const num = kind === 'ball' ? 0 : b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0) + 1;
+  const tk = { id:uid(), kind, num, x:34, y: kind === 'A' ? 40 : (kind === 'B' ? 65 : 52.5) };
+  b.tokens.push(tk);
+  pzSel = { type:'tok', id:tk.id };
+  pzRenderTools(); pzRenderBoard();
+}
+function pzAddZone(shape, cuadrada){
+  const z = { id:uid(), shape, x:23, y:42, w: cuadrada ? 16 : (shape === 'rect' ? 22 : 18), h:16,
+              color: pz.board.zones.length % PZ_ZONE_COLORS.length };
+  pz.board.zones.push(z);
+  pzSel = { type:'zone', id:z.id };
+  pzRenderTools(); pzRenderBoard();
+}
+function pzZoneColor(){
+  const z = pzSel && pzSel.type === 'zone' ? pz.board.zones.find(x => x.id === pzSel.id) : null;
+  if (!z) return;
+  z.color = (z.color + 1) % PZ_ZONE_COLORS.length;
+  pzRenderBoard();
+}
+function pzDelSel(){
+  if (!pzSel) return;
+  if (pzSel.type === 'tok') pz.board.tokens = pz.board.tokens.filter(t => t.id !== pzSel.id);
+  else pz.board.zones = pz.board.zones.filter(z => z.id !== pzSel.id);
+  pzSel = null;
+  pzRenderTools(); pzRenderBoard();
+}
+function pzToggleView(){
+  pz.board.view = (pz.board.view === 'chips') ? 'figs' : 'chips';
+  pzRenderTools(); pzRenderBoard();
+}
+
+/* --- dibujo de la cancha (SVG 68×105) --- */
+const PZ_FIELD = (function(){
+  const L = 'fill="none" stroke="#f8fafc" stroke-width=".45" opacity=".85"';
+  let s = '<rect x="0" y="0" width="68" height="105" fill="#15803d"/>';
+  for (let i = 1; i < 10; i += 2) s += '<rect x="0" y="' + (i * 10.5) + '" width="68" height="10.5" fill="#166534" opacity=".5"/>';
+  s += '<rect x="2" y="2" width="64" height="101" ' + L + '/>' +
+       '<line x1="2" y1="52.5" x2="66" y2="52.5" ' + L + '/>' +
+       '<circle cx="34" cy="52.5" r="9.15" ' + L + '/>' +
+       '<circle cx="34" cy="52.5" r=".7" fill="#f8fafc" opacity=".85"/>' +
+       '<rect x="13.84" y="2" width="40.32" height="16.5" ' + L + '/>' +
+       '<rect x="24.84" y="2" width="18.32" height="5.5" ' + L + '/>' +
+       '<circle cx="34" cy="13" r=".7" fill="#f8fafc" opacity=".85"/>' +
+       '<rect x="13.84" y="86.5" width="40.32" height="16.5" ' + L + '/>' +
+       '<rect x="24.84" y="97.5" width="18.32" height="5.5" ' + L + '/>' +
+       '<circle cx="34" cy="92" r=".7" fill="#f8fafc" opacity=".85"/>';
+  return s;
+})();
+
+function pzZoneMarkup(z, sel){
+  const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
+  let shape;
+  if (z.shape === 'circle'){
+    shape = '<ellipse cx="' + (z.x + z.w / 2) + '" cy="' + (z.y + z.h / 2) + '" rx="' + (z.w / 2) + '" ry="' + (z.h / 2) + '"';
+  } else if (z.shape === 'tri'){
+    shape = '<polygon points="' + (z.x + z.w / 2) + ',' + z.y + ' ' + z.x + ',' + (z.y + z.h) + ' ' + (z.x + z.w) + ',' + (z.y + z.h) + '"';
+  } else {
+    shape = '<rect x="' + z.x + '" y="' + z.y + '" width="' + z.w + '" height="' + z.h + '" rx="1"';
+  }
+  let h = '<g data-pz="zone:' + z.id + '">' + shape + ' fill="' + col + '" fill-opacity=".28" stroke="' + col + '" stroke-width=".45" stroke-dasharray="1.6 1"/></g>';
+  if (sel){
+    h = '<rect x="' + (z.x - .8) + '" y="' + (z.y - .8) + '" width="' + (z.w + 1.6) + '" height="' + (z.h + 1.6) + '" fill="none" stroke="#fff" stroke-width=".3" stroke-dasharray="1 1"/>' + h +
+        '<rect data-pz="handle:' + z.id + '" x="' + (z.x + z.w - 1.6) + '" y="' + (z.y + z.h - 1.6) + '" width="3.2" height="3.2" rx=".6" fill="#fff" stroke="#0f172a" stroke-width=".25"/>';
+  }
+  return h;
+}
+function pzTokMarkup(tk, view, sel){
+  const col = PZ_TEAM_COLORS[tk.kind];
+  let inner;
+  if (tk.kind === 'ball'){
+    inner = '<circle r="2" fill="#fff" stroke="#0f172a" stroke-width=".2"/>' +
+            '<text y=".15" font-size="3.1" text-anchor="middle" dominant-baseline="central">⚽</text>';
+  } else if (view === 'figs'){
+    inner = '<circle cy="-2.9" r="1.35" fill="#eab188"/>' +
+            '<path d="M-2.5,-1.5 L-0.9,-1.9 Q0,-2.15 0.9,-1.9 L2.5,-1.5 L2,0.8 L1.4,0.6 L1.4,3.1 L-1.4,3.1 L-1.4,0.6 L-2,0.8 Z" fill="' + col + '" stroke="#f8fafc" stroke-width=".18"/>' +
+            '<text y="1.4" font-size="2" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
+  } else {
+    inner = '<circle r="2.9" fill="' + col + '" stroke="#f8fafc" stroke-width=".35"/>' +
+            '<text y=".1" font-size="2.7" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
+  }
+  const ring = sel ? '<circle r="4.2" fill="none" stroke="#fff" stroke-width=".35" stroke-dasharray="1 .8"/>' : '';
+  return '<g data-pz="tok:' + tk.id + '" transform="translate(' + tk.x + ' ' + tk.y + ')">' + ring + inner + '</g>';
+}
+function pzRenderBoard(){
+  const svg = document.getElementById('pzSvg');
+  if (!svg || !pz) return;
+  const b = pz.board;
+  svg.innerHTML = PZ_FIELD +
+    b.zones.map(z => pzZoneMarkup(z, !!(pzSel && pzSel.type === 'zone' && pzSel.id === z.id))).join('') +
+    b.tokens.map(t => pzTokMarkup(t, b.view, !!(pzSel && pzSel.type === 'tok' && pzSel.id === t.id))).join('');
+}
+
+/* --- interacción táctil / mouse sobre la cancha --- */
+function pzClamp(v, a, b){ return Math.min(b, Math.max(a, v)); }
+function pzXY(e){
+  const svg = document.getElementById('pzSvg');
+  const r = svg.getBoundingClientRect();
+  return { x:(e.clientX - r.left) / r.width * 68, y:(e.clientY - r.top) / r.height * 105 };
+}
+(function(){
+  const svg = document.getElementById('pzSvg');
+  svg.addEventListener('pointerdown', e => {
+    if (!pz) return;
+    e.preventDefault();
+    const g = e.target.closest ? e.target.closest('[data-pz]') : null;
+    if (!g){
+      if (pzSel){ pzSel = null; pzRenderTools(); pzRenderBoard(); }
+      return;
+    }
+    const parts = g.getAttribute('data-pz').split(':');
+    const kind = parts[0], id = parts[1];
+    const p = pzXY(e);
+    if (kind === 'handle'){
+      pzDrag = { kind, id };
+    } else if (kind === 'tok'){
+      const tk = pz.board.tokens.find(t => t.id === id);
+      if (!tk) return;
+      pzDrag = { kind, id, dx: tk.x - p.x, dy: tk.y - p.y };
+      pzSel = { type:'tok', id };
+    } else {
+      const z = pz.board.zones.find(t => t.id === id);
+      if (!z) return;
+      pzDrag = { kind, id, dx: z.x - p.x, dy: z.y - p.y };
+      pzSel = { type:'zone', id };
+    }
+    pzRenderTools(); pzRenderBoard();
+    try { svg.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!pz || !pzDrag) return;
+    e.preventDefault();
+    const p = pzXY(e);
+    if (pzDrag.kind === 'tok'){
+      const tk = pz.board.tokens.find(t => t.id === pzDrag.id);
+      if (!tk) return;
+      tk.x = pzClamp(p.x + pzDrag.dx, 2.5, 65.5);
+      tk.y = pzClamp(p.y + pzDrag.dy, 2.5, 102.5);
+    } else if (pzDrag.kind === 'zone'){
+      const z = pz.board.zones.find(t => t.id === pzDrag.id);
+      if (!z) return;
+      z.x = pzClamp(p.x + pzDrag.dx, 0, 68 - z.w);
+      z.y = pzClamp(p.y + pzDrag.dy, 0, 105 - z.h);
+    } else {
+      const z = pz.board.zones.find(t => t.id === pzDrag.id);
+      if (!z) return;
+      z.w = pzClamp(p.x - z.x, 5, 68 - z.x);
+      z.h = pzClamp(p.y - z.y, 5, 105 - z.y);
+    }
+    pzRenderBoard();
+  });
+  const pzUp = () => { pzDrag = null; };
+  svg.addEventListener('pointerup', pzUp);
+  svg.addEventListener('pointercancel', pzUp);
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/backup.js ===== Copia de seguridad completa
    ═══════════════════════════════════════════════════════════════════ */
 function exportBackup(){
@@ -4248,10 +4703,11 @@ function importBackupFile(ev){
       S.evaluations = S.evaluations || [];
       S.evalAspects = S.evalAspects || DEF_ASPECTS.slice();
       S.grupos = S.grupos || DEF_GRUPOS.map(g => Object.assign({}, g));
+      S.exercises = S.exercises || [];
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
-      renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
