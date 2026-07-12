@@ -73,7 +73,7 @@ grep -n "===== js/" index.html
 | `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
 | `js/groups.js` | Grupos de rendimiento (botón en Pruebas, overlay `ovGrupos`): 3 grupos DERIVADOS de la última marca, modo auto (tercios) o umbral (cortes en `testDef.grupos`); colores/nombres en `S.grupos`; benchmarking por posición, subió/bajó, armar equipos parejos |
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
-| `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia |
+| `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia; **RPE** por presente + duración de la clase (`a.rpe`/`a.durMin`), carga = RPE×min (`cargaDe`) y tarjeta de carga semanal con ⚠ si supera 150% del promedio de 4 semanas |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
 | `js/board.js` | pestaña 📋 Pizarra (3 vistas: Ejercicios / Sesiones / 📅 Semana): ejercicios en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota, `label`/`pid` para nombres) y zonas arrastrables por pointer events, chapitas/figuras, ficha del ejercicio; animación por pasos (`board.frames`, `pzTick`/`pzPlay`), video WebM (`pzCanvasDraw` + MediaRecorder), biblioteca `PZ_LIB` (20 precargados), compartir (`exExport`/`importExerciseJson`), semana `renderPzWeek`. ⚠️ rAF casi no corre bajo `--virtual-time-budget`: en tests llamar `pzTick(t)` a mano |
 | `js/sessions.js` | Sesiones de entrenamiento (`S.trainSessions`, vista "🗓 Sesiones" del toggle en Pizarra, funciones `ses*`): bloques cal/ppal/vc con ejercicios de la pizarra o actividades libres, minutos con default en `carga.dur`, total derivado (`sesTotalMin`), duplicar, "sesión de hoy" en Clases |
@@ -141,16 +141,12 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 ## PENDIENTE (próximas sesiones)
 
 Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-12 están HECHAS
-**todas las etapas (0–20)**: incluye crono, grupos, PWA instalable y el
-módulo completo de planificación: pizarra táctica (base + animación + video
-+ nombres/jugadores de cualquier equipo), sesiones por bloques, PDF de
-ejercicio/sesión, biblioteca de 20 ejercicios, vista Semana y compartir
-ejercicios por archivo.
-
-**PENDIENTE DE DECISIÓN DE JULIO (anotado 2026-07-12): control de carga con
-RPE** (esfuerzo percibido 1-10 por jugador al final de cada clase, carga =
-RPE × minutos). Julio dijo que lo analiza y avisa si se implementa. NO
-implementar hasta que confirme.
+**todas las etapas (0–26)**: crono, grupos, PWA instalable, el módulo
+completo de planificación (pizarra táctica con animación, video MP4,
+multimedia guardada, líneas/flechas/guías, multi-touch, rotación, nombres y
+jugadores por posición, carpetas por objetivo, biblioteca, compartir),
+sesiones por bloques, PDF de ejercicio/sesión, vista Semana y el control de
+carga RPE (aprobado por Julio el 2026-07-12). No hay pedidos pendientes.
 
 Ideas menores / oportunidades (ninguna pedida por Julio todavía):
 

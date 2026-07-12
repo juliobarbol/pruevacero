@@ -81,7 +81,9 @@ team = { id, nombre, escudoId?,          // escudo en IndexedDB (getPhoto)
 
 attendance = [ {                 // una lista de asistencia por (equipo, categoría, fecha)
   id, teamId, catId|null, fecha,
-  marks: { [playerId]: 'P'|'A'|'L' }   // presente / ausente / lesionado
+  marks: { [playerId]: 'P'|'A'|'L' },  // presente / ausente / lesionado
+  durMin?,                             // duración de la clase (min, default 90) — RPE (Etapa 26)
+  rpe?: { [playerId]: 1-10 }           // esfuerzo percibido de los presentes; carga = rpe × durMin
 } ]
 // El % de asistencia = P/(P+A) — los días lesionado no bajan el %.
 // Pestaña 🗓️ Clases: botón "lista de HOY" + abrir cualquier fecha pasada
@@ -242,6 +244,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 23 | **Pizarra — multi-touch y rotación**: arrastre simultáneo de varias fichas (un dedo cada una, `pzDrag` por pointerId); zonas rotables con gesto de DOS dedos sobre la misma zona (`pzRot`) o botón ↻ Girar (+15°); `zone.rot` gira todo el grupo y el cambio de tamaño des-rota el punto (`pzZoneLocal`) | HECHA (2026-07-12) |
 | 24 | **Video MP4 + multimedia guardada** (pedido 2026-07-12: WebM no abría en galería/WhatsApp): `pzVideoMime()` prefiere `video/mp4` (avc1) y cae a WebM avisando; al generar, opción de guardarlo DENTRO del ejercicio (store IndexedDB `media` v2, Blob + snapshot PNG, sin caché en memoria) con sección "🎞 Multimedia" (ver/descargar/borrar). Los videos NO viajan en backup/compartir/duplicar; `pzJson` los excluye del control de cambios | HECHA (2026-07-12) |
 | 25 | **Carpetas por objetivo** (`S.folders`, 7 de base: físico/técnico/táctico/pelota parada/salida/presión/coordinación + personalizables en `ovFolders`): campo `carpeta` en el ejercicio, selector en el editor, chips de filtro en la lista (+ "Sin carpeta"), gestor con renombrar/borrar (borrar deja los ejercicios sin carpeta); al compartir, la carpeta viaja solo si el id existe en destino | HECHA (2026-07-12) |
+| 26 | **Control de carga RPE** (APROBADO por Julio 2026-07-12): al pasar lista, duración de la clase (`attendance.durMin`, default 90) y RPE 1-10 por presente (`attendance.rpe`, se limpia si deja de estar P); carga = RPE × minutos (`cargaDe`); tarjeta "📈 Carga de entrenamiento" en Clases: carga de la semana actual vs promedio semanal de las 4 anteriores, con ⚠ si supera el 150% | HECHA (2026-07-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
