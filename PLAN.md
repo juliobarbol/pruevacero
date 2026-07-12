@@ -238,6 +238,8 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 19 | **Vista 📅 Semana** (tercer segmento en Pizarra, `renderPzWeek`): la semana Lu-Do con navegación ‹ › y "HOY" resaltado; junta clases (días/hora de cada categoría), partidos y sesiones (por fecha) y ejercicios (por día de la semana), todo clickeable | HECHA (2026-07-12) |
 | 20 | **Compartir ejercicios entre instalaciones** (📤 en la tarjeta del ejercicio + 📥 Importar en la Pizarra): archivo JSON `pc_exercise_v1` con dibujo, animación, carga y nombres visibles; los ids locales (jugadores `pid`, categoría) NO viajan y se limpian al importar (`exExport`/`importExerciseJson`) | HECHA (2026-07-12) |
 | 21 | **Pizarra — jugadores reemplazan y se ubican por posición** (pedido 2026-07-12): "Ponerlos en la cancha" ahora ELIMINA las fichas sin nombre de ese color y ubica a cada jugador en su franja según `posicion.linea` (arquero/defensa/medio/ataque, espejado para azules; sin posición ⇒ medio), repartidos a lo ancho | HECHA (2026-07-12) |
+| 22 | **Pizarra — líneas/flechas y guías**: elementos `board.lines` (→ flecha, ⇢ punteada, ─ línea) arrastrables enteros o por extremos (manijas), con color ciclado; guías superpuestas `board.guide` cicladas con ▦ (cuadrícula 5×7, tercios, carriles), presentes también en video y PDF | HECHA (2026-07-12) |
+| 23 | **Pizarra — multi-touch y rotación**: arrastre simultáneo de varias fichas (un dedo cada una, `pzDrag` por pointerId); zonas rotables con gesto de DOS dedos sobre la misma zona (`pzRot`) o botón ↻ Girar (+15°); `zone.rot` gira todo el grupo y el cambio de tamaño des-rota el punto (`pzZoneLocal`) | HECHA (2026-07-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
