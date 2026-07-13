@@ -140,13 +140,15 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 
 ## PENDIENTE (próximas sesiones)
 
-Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-12 están HECHAS
-**todas las etapas (0–26)**: crono, grupos, PWA instalable, el módulo
-completo de planificación (pizarra táctica con animación, video MP4,
-multimedia guardada, líneas/flechas/guías, multi-touch, rotación, nombres y
+Fuente de verdad: tabla de etapas de `PLAN.md`. Al 2026-07-13 están HECHAS
+**todas las etapas (0–30)**: crono, grupos, PWA instalable, el módulo
+completo de planificación (pizarra táctica con animación —pasos al final,
+deshacer y versiones restaurables—, 4 equipos, cancha reglamentaria, video
+MP4, multimedia guardada, líneas/flechas, guías personalizables numeradas,
+etiquetas de zona, carriles pintados, multi-touch, rotación, nombres y
 jugadores por posición, carpetas por objetivo, biblioteca, compartir),
 sesiones por bloques, PDF de ejercicio/sesión, vista Semana y el control de
-carga RPE (aprobado por Julio el 2026-07-12). No hay pedidos pendientes.
+carga RPE. No hay pedidos pendientes.
 
 Ideas menores / oportunidades (ninguna pedida por Julio todavía):
 

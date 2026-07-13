@@ -706,9 +706,12 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <div><select id="pzCatF" onchange="pzRenderPlayers()"></select></div>
   </div>
   <div class="chips" id="pzPlayers" style="flex-wrap:wrap;margin-top:8px"></div>
-  <div class="btn-row" style="margin-top:6px">
-    <button class="btn sec mini" onclick="pzPlayersToBoard('A')">🔴 Ponerlos en la cancha</button>
-    <button class="btn sec mini" onclick="pzPlayersToBoard('B')">🔵 Ponerlos en la cancha</button>
+  <label>Ponerlos en la cancha como…</label>
+  <div class="chips">
+    <button class="chip" onclick="pzPlayersToBoard('A')">🔴 rojos</button>
+    <button class="chip" onclick="pzPlayersToBoard('B')">🔵 azules</button>
+    <button class="chip" onclick="pzPlayersToBoard('C')">🟠 naranjas</button>
+    <button class="chip" onclick="pzPlayersToBoard('D')">⚪ blancos</button>
   </div>
   <p class="hint" style="margin-top:6px">Los participantes entran con su nombre,
   <b>reemplazan</b> a las fichas sin nombre de ese color y se ubican según su
@@ -747,6 +750,34 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <button class="btn sec" onclick="pzBack()">Cancelar</button>
     <button class="btn" onclick="pzSave()">💾 Guardar</button>
   </div>
+</div>
+
+<!-- ══════════════ OVERLAY GUÍAS DE LA CANCHA ══════════════ -->
+<div class="overlay" id="ovGuide">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="guDone()">←</button>
+    <h2>Guías de la cancha</h2>
+  </div>
+  <p class="hint">Las guías son líneas de referencia superpuestas (no se mueven ni
+  se borran con las fichas). Salen también en el video y el PDF.</p>
+  <label>Tipo de guía</label>
+  <div class="chips" id="guTipo"></div>
+  <div id="guGridCfg" style="display:none">
+    <div class="form-grid">
+      <div><label>Columnas (a lo ancho)</label><input id="guCols" type="number" inputmode="numeric" min="2" max="12" onchange="guSetDims()"></div>
+      <div><label>Filas (a lo largo)</label><input id="guRows" type="number" inputmode="numeric" min="2" max="16" onchange="guSetDims()"></div>
+    </div>
+  </div>
+  <div class="chips" id="guNumsRow" style="margin-top:10px"></div>
+  <div class="card" style="margin-top:14px">
+    <h3>🖌 Pintar un carril de color</h3>
+    <p class="hint">Crea un rectángulo de color sobre uno de los 5 carriles
+    (lateral izquierdo, interno izquierdo, central, interno derecho, lateral
+    derecho) para marcar por dónde atacar o por dónde NO transitar. Después se
+    puede cambiar de color (🎨), achicar o borrar como cualquier zona.</p>
+    <div class="chips" id="guCarriles"></div>
+  </div>
+  <button class="btn" onclick="guDone()">Listo</button>
 </div>
 
 <!-- ══════════════ OVERLAY CARPETAS DE EJERCICIOS ══════════════ -->
@@ -3949,7 +3980,10 @@ async function objetivoDelete(i){
 //           zones:[{id,shape:'rect'|'circle'|'tri',x,y,w,h,color}] } }
 // Coordenadas en unidades del viewBox de la cancha (68 × 105, como una cancha real en m).
 const PZ_ZONE_COLORS = ['#facc15', '#38bdf8', '#f87171', '#f8fafc'];
-const PZ_TEAM_COLORS = { A:'#ef4444', B:'#3b82f6' };
+const PZ_TEAM_COLORS = { A:'#ef4444', B:'#3b82f6', C:'#f97316', D:'#f8fafc' };   // rojo, azul, naranja, blanco
+// El equipo blanco lleva número/borde oscuros para que se lea sobre el pasto
+function pzTokNumFill(kind){ return kind === 'D' ? '#0f172a' : '#fff'; }
+function pzTokStroke(kind){ return kind === 'D' ? '#0f172a' : '#f8fafc'; }
 const ETAPAS_CARGA = { acumulacion:'Acumulación', transformacion:'Transformación', realizacion:'Realización' };
 const INTENSIDADES = { baja:'Baja', media:'Media', alta:'Alta', maxima:'Máxima' };
 
@@ -3959,6 +3993,43 @@ let pzSel = null;      // selección en la cancha: {type:'tok'|'zone', id}
 let pzDrag = {};       // arrastres en curso por puntero (multi-touch: una ficha por dedo)
 let pzPts = {};        // última posición conocida de cada puntero
 let pzRot = null;      // rotación de zona con dos dedos: {id, pA, pB, a0, rot0}
+let pzUndo = [];       // pila de deshacer de la PIZARRA (solo board, por sesión de edición)
+
+function pzPushUndo(){
+  if (!pz) return;
+  pzUndo.push(JSON.stringify(pz.board));
+  if (pzUndo.length > 40) pzUndo.shift();
+}
+function pzUndoDo(){
+  if (!pzUndo.length || pzPlaying) return;
+  pz.board = JSON.parse(pzUndo.pop());
+  pzFrame = Math.min(pzFrame, pz.board.frames.length - 1);
+  pzSel = null;
+  pzLoadPos(pzFrame);
+  pzRenderTools(); pzRenderFrames(); pzRenderBoard();
+}
+// Restaurar la pizarra de un guardado anterior (por si se guardó por error)
+async function pzRestoreVersion(){
+  const h = pz.hist || [];
+  if (!h.length || pzPlaying) return;
+  const ult = h[h.length - 1];
+  const ok = await appConfirm('Restaurar versión anterior',
+    'La PIZARRA vuelve a como estaba antes del último guardado (' + fmtFecha(ult.fecha || '') + '). ' +
+    'Los datos de la ficha (nombre, carga, etc.) no se tocan. Después guardá para confirmar.',
+    { okLabel:'Restaurar' });
+  if (!ok) return;
+  pzPushUndo();
+  pz.board = JSON.parse(JSON.stringify(ult.board));
+  pz.board.tokens = pz.board.tokens || [];
+  pz.board.zones = pz.board.zones || [];
+  pz.board.lines = pz.board.lines || [];
+  if (!Array.isArray(pz.board.frames) || !pz.board.frames.length) pz.board.frames = [{ pos:{} }];
+  pz.hist = h.slice(0, -1);
+  pzFrame = 0; pzSel = null;
+  pzLoadPos(0);
+  pzRenderTools(); pzRenderFrames(); pzRenderBoard();
+  toast('Pizarra restaurada — tocá 💾 Guardar para confirmarla');
+}
 let pzFrame = 0;       // paso (fotograma) seleccionado de la animación
 let pzPlaying = null;  // reproducción en curso: {seg, t0, raf}
 let pzRec = null;      // grabación de video en curso
@@ -4096,6 +4167,7 @@ function exDuplicate(id){
   c.nombre = e.nombre + ' (copia)';
   c.creado = todayISO();
   c.media = [];   // los videos guardados no se comparten entre copias
+  c.hist = [];
   S.exercises.push(c);
   saveData();
   renderPizarra();
@@ -4111,6 +4183,7 @@ function exExport(id){
   c.jugadores = [];
   c.categoria = null;
   c.media = [];   // los videos guardados quedan en este dispositivo
+  c.hist = [];    // el historial de versiones tampoco viaja
   (c.board && c.board.tokens || []).forEach(t => { delete t.pid; });
   const payload = { _app:'PruevaCero', _type:'pc_exercise_v1', _version:1, _exportedAt:new Date().toISOString(), exercise:c };
   download('ejercicio-' + _slug(e.nombre || 'pizarra') + '.json', JSON.stringify(payload, null, 2));
@@ -4132,6 +4205,7 @@ function importExerciseJson(text, teamId){
   e.board.zones = e.board.zones || [];
   e.board.lines = e.board.lines || [];
   e.media = [];
+  e.hist = [];
   // la carpeta viaja solo si existe acá (las 7 de base comparten id)
   if (e.carpeta && !S.folders.some(f => f.id === e.carpeta)) e.carpeta = null;
   e.board.tokens.forEach(t => { delete t.pid; });
@@ -4208,6 +4282,7 @@ function pzOpen(id){
   pz.board.lines = pz.board.lines || [];
   pz.board.guide = pz.board.guide || '';
   pz.media = pz.media || [];
+  pz.hist = pz.hist || [];
   // Migración a animación (Etapa 13): ejercicios viejos sin pasos
   if (!Array.isArray(pz.board.frames) || !pz.board.frames.length){
     pz.board.frames = [{ pos:{} }];
@@ -4232,6 +4307,7 @@ function pzOpenUI(title){
   setv('pzMicro', pz.plan.micro);
   document.getElementById('pzEtapa').value = pz.plan.etapa || '';
   pzFrame = 0;
+  pzUndo = [];
   pzLoadPos(0);
   document.getElementById('pzCarpeta').innerHTML = '<option value="">Sin carpeta</option>' +
     S.folders.map(f => '<option value="' + f.id + '"' + (pz.carpeta === f.id ? ' selected' : '') + '>' + esc(f.nombre) + '</option>').join('');
@@ -4263,7 +4339,14 @@ function pzSave(){
   pzCollect();
   if (!pz.nombre){ toast('Ponele un nombre al ejercicio', true); return; }
   const ix = S.exercises.findIndex(x => x.id === pz.id);
-  if (ix >= 0) S.exercises[ix] = pz; else S.exercises.push(pz);
+  if (ix >= 0){
+    const prev = S.exercises[ix];
+    // guarda la pizarra ANTERIOR como versión restaurable (máx 5)
+    if (JSON.stringify(prev.board) !== JSON.stringify(pz.board)){
+      pz.hist = (prev.hist || []).concat([{ fecha:todayISO(), board:prev.board }]).slice(-5);
+    } else pz.hist = prev.hist || [];
+    S.exercises[ix] = pz;
+  } else S.exercises.push(pz);
   saveData();
   pzSnap = pzJson(pz);
   closeOverlay('ovBoard');
@@ -4335,6 +4418,7 @@ function pzPlayersToBoard(kind){
     toast(pz.jugadores.length ? 'Todos los participantes ya están en la cancha' : 'Primero elegí jugadores tocando sus nombres', true);
     return;
   }
+  pzPushUndo();
   // 1) las fichas genéricas (sin jugador) de ese color se van: las reemplazan
   b.tokens.filter(t => t.kind === kind && !t.pid).forEach(t => {
     b.frames.forEach(f => { delete f.pos[t.id]; });
@@ -4347,9 +4431,9 @@ function pzPlayersToBoard(kind){
     const l = (p && p.posicion && porLinea[p.posicion.linea]) ? p.posicion.linea : 'medio';
     porLinea[l].push(p || { id:pid, nombre:'' });
   });
-  const YS = (kind === 'A')
-    ? { arquero:8,  defensor:22, medio:36, atacante:49 }    // rojos: mitad de arriba
-    : { arquero:97, defensor:83, medio:69, atacante:56 };   // azules: mitad de abajo
+  const YS = (kind === 'A' || kind === 'C')
+    ? { arquero:8,  defensor:22, medio:36, atacante:49 }    // rojos/naranjas: mitad de arriba
+    : { arquero:97, defensor:83, medio:69, atacante:56 };   // azules/blancos: mitad de abajo
   let num = b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0);
   ['arquero', 'defensor', 'medio', 'atacante'].forEach(l => {
     const fila = porLinea[l];
@@ -4366,10 +4450,23 @@ function pzPlayersToBoard(kind){
   toast(faltan.length + ' jugador' + (faltan.length === 1 ? '' : 'es') + ' a la cancha, ubicados por posición');
 }
 async function pzTokLabel(){
+  // Con una ZONA seleccionada, 🏷 pone la etiqueta estratégica del espacio
+  if (pzSel && pzSel.type === 'zone'){
+    const z = pz.board.zones.find(x => x.id === pzSel.id);
+    if (!z) return;
+    const v = await appPromptText('Etiqueta de la zona',
+      'Se muestra en el centro de la zona. Ej: Zona de creación, Zona de ataque, Zona de defensa, Zona de entrada. Vacío = sin etiqueta:', z.label || '');
+    if (v === null) return;
+    pzPushUndo();
+    z.label = v;
+    pzRenderBoard();
+    return;
+  }
   const tk = (pzSel && pzSel.type === 'tok') ? pz.board.tokens.find(t => t.id === pzSel.id) : null;
   if (!tk) return;
   const v = await appPromptText('Nombre en la ficha', 'Se muestra debajo de la ficha (dejalo vacío para que quede solo el número):', tk.label || '');
   if (v === null) return;
+  pzPushUndo();
   tk.label = v;
   pzRenderBoard();
 }
@@ -4403,6 +4500,8 @@ function pzRenderTools(){
   const selZone = pzSel && pzSel.type === 'zone';
   let h = '<button class="chip" onclick="pzAddTok(\'A\')">➕ 🔴 rojo</button>' +
           '<button class="chip" onclick="pzAddTok(\'B\')">➕ 🔵 azul</button>' +
+          '<button class="chip" onclick="pzAddTok(\'C\')">➕ 🟠 naranja</button>' +
+          '<button class="chip" onclick="pzAddTok(\'D\')">➕ ⚪ blanco</button>' +
           '<button class="chip" onclick="pzAddTok(\'ball\')">➕ ⚽</button>' +
           '<button class="chip" onclick="pzAddZone(\'rect\', true)">➕ ◻ zona</button>' +
           '<button class="chip" onclick="pzAddZone(\'rect\')">➕ ▭ zona</button>' +
@@ -4411,16 +4510,19 @@ function pzRenderTools(){
           '<button class="chip" onclick="pzAddLine(\'flecha\')">➕ → flecha</button>' +
           '<button class="chip" onclick="pzAddLine(\'punteada\')">➕ ⇢ punteada</button>' +
           '<button class="chip" onclick="pzAddLine(\'linea\')">➕ ─ línea</button>' +
-          '<button class="chip" onclick="pzToggleGuide()">▦ ' + ({ '':'Guías: no', grid:'Guías: 5×7', tercios:'Guías: tercios', carriles:'Guías: carriles' }[pz.board.guide || '']) + '</button>' +
+          '<button class="chip" onclick="openGuide()">▦ ' + ({ '':'Guías: no', grid:'Guías: cuadrícula', tercios:'Guías: tercios', carriles:'Guías: carriles' }[pzGuideNorm(pz.board.guide).tipo]) + '</button>' +
           '<button class="chip on" onclick="pzToggleView()">' + (pz.board.view === 'chips' ? '🏃 Ver figuras' : '⬤ Ver chapitas') + '</button>';
   const selLine = pzSel && pzSel.type === 'line';
+  if (pzUndo.length) h += '<button class="chip" onclick="pzUndoDo()">↩ Deshacer</button>';
+  if ((pz.hist || []).length) h += '<button class="chip" onclick="pzRestoreVersion()">🕘 Versión anterior</button>';
   if (selZone || selLine) h += '<button class="chip" onclick="pzZoneColor()">🎨 Color</button>';
   if (selZone) h += '<button class="chip" onclick="pzZoneRotate()">↻ Girar</button>';
-  if (selTok) h += '<button class="chip" onclick="pzTokLabel()">🏷 Nombre</button>';
+  if (selTok || selZone) h += '<button class="chip" onclick="pzTokLabel()">🏷 ' + (selZone ? 'Etiqueta' : 'Nombre') + '</button>';
   if (selTok || selZone || selLine) h += '<button class="chip" style="color:var(--danger);border-color:var(--danger)" onclick="pzDelSel()">🗑 Borrar</button>';
   document.getElementById('pzTools').innerHTML = h;
 }
 function pzAddLine(tipo){
+  pzPushUndo();
   const n = pz.board.lines.length;
   const off = (n % 4) * 5;
   const ln = { id:uid(), tipo, x1:20 + off, y1:44 + off, x2:44 + off, y2:58 + off, color:3 };
@@ -4428,21 +4530,79 @@ function pzAddLine(tipo){
   pzSel = { type:'line', id:ln.id };
   pzRenderTools(); pzRenderBoard();
 }
-function pzToggleGuide(){
-  const orden = ['', 'grid', 'tercios', 'carriles'];
-  pz.board.guide = orden[(orden.indexOf(pz.board.guide || '') + 1) % orden.length];
+// La guía puede ser string (versión vieja) u objeto {tipo, cols, rows, nums}
+function pzGuideNorm(g){
+  if (!g) return { tipo:'', cols:5, rows:7, nums:false };
+  if (typeof g === 'string') return { tipo:g, cols:5, rows:7, nums:false };
+  return { tipo:g.tipo || '', cols:Number(g.cols) || 5, rows:Number(g.rows) || 7, nums:!!g.nums };
+}
+function openGuide(){
+  if (!pz) return;
+  guRender();
+  openOverlay('ovGuide');
+}
+function guRender(){
+  const g = pzGuideNorm(pz.board.guide);
+  const tipos = [['', 'Ninguna'], ['grid', '▦ Cuadrícula'], ['tercios', '≡ Tercios'], ['carriles', '||| Carriles (5)']];
+  document.getElementById('guTipo').innerHTML = tipos.map(t =>
+    '<button class="chip' + (g.tipo === t[0] ? ' on' : '') + '" onclick="guSet(\'' + t[0] + '\')">' + t[1] + '</button>').join('');
+  document.getElementById('guGridCfg').style.display = (g.tipo === 'grid') ? 'block' : 'none';
+  document.getElementById('guCols').value = g.cols;
+  document.getElementById('guRows').value = g.rows;
+  document.getElementById('guNumsRow').innerHTML = (g.tipo === 'grid' || g.tipo === 'carriles')
+    ? '<button class="chip' + (g.nums ? ' on' : '') + '" onclick="guToggleNums()">🔢 Numerar las zonas</button>'
+    : '';
+  document.getElementById('guCarriles').innerHTML = [1, 2, 3, 4, 5].map(i =>
+    '<button class="chip" onclick="pzPaintCarril(' + (i - 1) + ')">Carril ' + i + '</button>').join('');
+}
+function guSet(tipo){
+  pzPushUndo();
+  const g = pzGuideNorm(pz.board.guide);
+  g.tipo = tipo;
+  pz.board.guide = g;
+  guRender(); pzRenderTools(); pzRenderBoard();
+}
+function guSetDims(){
+  const g = pzGuideNorm(pz.board.guide);
+  g.cols = pzClamp(Number(document.getElementById('guCols').value) || 5, 2, 12);
+  g.rows = pzClamp(Number(document.getElementById('guRows').value) || 7, 2, 16);
+  pz.board.guide = g;
+  guRender(); pzRenderBoard();
+}
+function guToggleNums(){
+  const g = pzGuideNorm(pz.board.guide);
+  g.nums = !g.nums;
+  pz.board.guide = g;
+  guRender(); pzRenderBoard();
+}
+function guDone(){
+  closeOverlay('ovGuide');
   pzRenderTools(); pzRenderBoard();
 }
+// Pinta uno de los 5 carriles verticales como zona rectangular de color
+function pzPaintCarril(i){
+  pzPushUndo();
+  const w = 64 / 5;
+  const z = { id:uid(), shape:'rect', x:2 + w * i, y:2, w:w, h:101,
+              color:pz.board.zones.length % PZ_ZONE_COLORS.length, label:'' };
+  pz.board.zones.push(z);
+  pzSel = { type:'zone', id:z.id };
+  guDone();
+  toast('Carril ' + (i + 1) + ' pintado — cambiale el color con 🎨 si querés');
+}
 function pzAddTok(kind){
+  pzPushUndo();
   const b = pz.board;
   const num = kind === 'ball' ? 0 : b.tokens.filter(t => t.kind === kind).reduce((m, t) => Math.max(m, t.num), 0) + 1;
-  const tk = { id:uid(), kind, num, x:34, y: kind === 'A' ? 40 : (kind === 'B' ? 65 : 52.5) };
+  const ys = { A:40, B:65, C:44, D:61, ball:52.5 };
+  const tk = { id:uid(), kind, num, x:34, y: ys[kind] || 52.5 };
   b.tokens.push(tk);
   b.frames.forEach(f => { f.pos[tk.id] = { x:tk.x, y:tk.y }; });   // aparece en todos los pasos
   pzSel = { type:'tok', id:tk.id };
   pzRenderTools(); pzRenderBoard();
 }
 function pzAddZone(shape, cuadrada){
+  pzPushUndo();
   const z = { id:uid(), shape, x:23, y:42, w: cuadrada ? 16 : (shape === 'rect' ? 22 : 18), h:16,
               color: pz.board.zones.length % PZ_ZONE_COLORS.length };
   pz.board.zones.push(z);
@@ -4454,11 +4614,13 @@ function pzZoneColor(){
   if (pzSel && pzSel.type === 'zone') o = pz.board.zones.find(x => x.id === pzSel.id);
   if (pzSel && pzSel.type === 'line') o = pz.board.lines.find(x => x.id === pzSel.id);
   if (!o) return;
+  pzPushUndo();
   o.color = (o.color + 1) % PZ_ZONE_COLORS.length;
   pzRenderBoard();
 }
 function pzDelSel(){
   if (!pzSel) return;
+  pzPushUndo();
   if (pzSel.type === 'tok'){
     pz.board.tokens = pz.board.tokens.filter(t => t.id !== pzSel.id);
     pz.board.frames.forEach(f => { delete f.pos[pzSel.id]; });
@@ -4487,27 +4649,51 @@ const PZ_FIELD = (function(){
        '<circle cx="34" cy="13" r=".7" fill="#f8fafc" opacity=".85"/>' +
        '<rect x="13.84" y="86.5" width="40.32" height="16.5" ' + L + '/>' +
        '<rect x="24.84" y="97.5" width="18.32" height="5.5" ' + L + '/>' +
-       '<circle cx="34" cy="92" r=".7" fill="#f8fafc" opacity=".85"/>';
+       '<circle cx="34" cy="92" r=".7" fill="#f8fafc" opacity=".85"/>' +
+       // medias lunas del área (arco de r 9,15 desde el punto penal)
+       '<path d="M26.69,18.5 A9.15,9.15 0 0 1 41.31,18.5" ' + L + '/>' +
+       '<path d="M26.69,86.5 A9.15,9.15 0 0 0 41.31,86.5" ' + L + '/>' +
+       // ángulos de córner (cuartos de círculo de r 1)
+       '<path d="M3,2 A1,1 0 0 1 2,3" ' + L + '/>' +
+       '<path d="M65,2 A1,1 0 0 0 66,3" ' + L + '/>' +
+       '<path d="M3,103 A1,1 0 0 0 2,102" ' + L + '/>' +
+       '<path d="M65,103 A1,1 0 0 1 66,102" ' + L + '/>' +
+       // los arcos (7,32 de boca, la red por detrás de la línea)
+       '<rect x="30.34" y="0.4" width="7.32" height="1.6" ' + L + '/>' +
+       '<rect x="30.34" y="103" width="7.32" height="1.6" ' + L + '/>';
   return s;
 })();
 
-function pzGuideMarkup(g){
-  if (!g) return '';
+function pzGuideMarkup(g0){
+  const g = pzGuideNorm(g0);
+  if (!g.tipo) return '';
   const L = 'stroke="#f8fafc" stroke-width=".25" opacity=".35" stroke-dasharray="1.2 1.2"';
+  const num = (x, y, n) => '<text x="' + x.toFixed(2) + '" y="' + y.toFixed(2) +
+    '" font-size="1.9" font-weight="700" fill="#f8fafc" opacity=".55">' + n + '</text>';
   let s = '';
-  if (g === 'grid' || g === 'carriles'){
-    for (let i = 1; i < 5; i++){
-      const x = 2 + 64 * i / 5;
-      s += '<line x1="' + x + '" y1="2" x2="' + x + '" y2="103" ' + L + '/>';
+  if (g.tipo === 'grid'){
+    for (let i = 1; i < g.cols; i++){
+      const x = 2 + 64 * i / g.cols;
+      s += '<line x1="' + x.toFixed(2) + '" y1="2" x2="' + x.toFixed(2) + '" y2="103" ' + L + '/>';
     }
-  }
-  if (g === 'grid'){
-    for (let j = 1; j < 7; j++){
-      const y = 2 + 101 * j / 7;
+    for (let j = 1; j < g.rows; j++){
+      const y = 2 + 101 * j / g.rows;
       s += '<line x1="2" y1="' + y.toFixed(2) + '" x2="66" y2="' + y.toFixed(2) + '" ' + L + '/>';
     }
-  }
-  if (g === 'tercios'){
+    if (g.nums){
+      let n = 0;
+      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++){
+        n++;
+        s += num(2 + 64 * c / g.cols + 0.8, 2 + 101 * r / g.rows + 2.6, n);
+      }
+    }
+  } else if (g.tipo === 'carriles'){
+    for (let i = 1; i < 5; i++){
+      const x = 2 + 64 * i / 5;
+      s += '<line x1="' + x.toFixed(2) + '" y1="2" x2="' + x.toFixed(2) + '" y2="103" ' + L + '/>';
+    }
+    if (g.nums) for (let i = 0; i < 5; i++) s += num(2 + 64 * i / 5 + 0.8, 4.6, i + 1);
+  } else if (g.tipo === 'tercios'){
     [2 + 101 / 3, 2 + 202 / 3].forEach(y => {
       s += '<line x1="2" y1="' + y.toFixed(2) + '" x2="66" y2="' + y.toFixed(2) + '" ' + L + '/>';
     });
@@ -4548,16 +4734,22 @@ function pzZoneMarkup(z, sel){
     shape = '<rect x="' + z.x + '" y="' + z.y + '" width="' + z.w + '" height="' + z.h + '" rx="1"';
   }
   let h = '<g data-pz="zone:' + z.id + '">' + shape + ' fill="' + col + '" fill-opacity=".28" stroke="' + col + '" stroke-width=".45" stroke-dasharray="1.6 1"/></g>';
+  if (z.label){
+    let lbl = String(z.label);
+    if (lbl.length > 18) lbl = lbl.slice(0, 17) + '…';
+    h += '<text x="' + (z.x + z.w / 2) + '" y="' + (z.y + z.h / 2) + '" font-size="2.2" font-weight="700" fill="#fff" stroke="#0f172a" stroke-width=".28" paint-order="stroke" text-anchor="middle" dominant-baseline="central" opacity=".95">' + esc(lbl) + '</text>';
+  }
   if (sel){
     h = '<rect x="' + (z.x - .8) + '" y="' + (z.y - .8) + '" width="' + (z.w + 1.6) + '" height="' + (z.h + 1.6) + '" fill="none" stroke="#fff" stroke-width=".3" stroke-dasharray="1 1"/>' + h +
         '<rect data-pz="handle:' + z.id + '" x="' + (z.x + z.w - 1.6) + '" y="' + (z.y + z.h - 1.6) + '" width="3.2" height="3.2" rx=".6" fill="#fff" stroke="#0f172a" stroke-width=".25"/>';
   }
-  // La rotación gira TODO el grupo (forma + selección + manija) sobre el centro
+  // La rotación gira TODO el grupo (forma + etiqueta + selección + manija) sobre el centro
   return '<g transform="rotate(' + (z.rot || 0) + ' ' + (z.x + z.w / 2) + ' ' + (z.y + z.h / 2) + ')">' + h + '</g>';
 }
 function pzZoneRotate(){
   const z = (pzSel && pzSel.type === 'zone') ? pz.board.zones.find(x => x.id === pzSel.id) : null;
   if (!z) return;
+  pzPushUndo();
   z.rot = ((z.rot || 0) + 15) % 360;
   pzRenderBoard();
 }
@@ -4581,11 +4773,11 @@ function pzTokMarkup(tk, view, sel){
             '<text y=".15" font-size="3.1" text-anchor="middle" dominant-baseline="central">⚽</text>';
   } else if (view === 'figs'){
     inner = '<circle cy="-2.9" r="1.35" fill="#eab188"/>' +
-            '<path d="M-2.5,-1.5 L-0.9,-1.9 Q0,-2.15 0.9,-1.9 L2.5,-1.5 L2,0.8 L1.4,0.6 L1.4,3.1 L-1.4,3.1 L-1.4,0.6 L-2,0.8 Z" fill="' + col + '" stroke="#f8fafc" stroke-width=".18"/>' +
-            '<text y="1.4" font-size="2" font-weight="700" fill="#fff" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
+            '<path d="M-2.5,-1.5 L-0.9,-1.9 Q0,-2.15 0.9,-1.9 L2.5,-1.5 L2,0.8 L1.4,0.6 L1.4,3.1 L-1.4,3.1 L-1.4,0.6 L-2,0.8 Z" fill="' + col + '" stroke="' + pzTokStroke(tk.kind) + '" stroke-width=".18"/>' +
+            '<text y="1.4" font-size="2" font-weight="700" fill="' + pzTokNumFill(tk.kind) + '" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
   } else {
-    inner = '<circle r="2.9" fill="' + col + '" stroke="#f8fafc" stroke-width=".35"/>' +
-            '<text y=".1" font-size="2.7" font-weight="800" fill="#fff" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
+    inner = '<circle r="2.9" fill="' + col + '" stroke="' + pzTokStroke(tk.kind) + '" stroke-width=".35"/>' +
+            '<text y=".1" font-size="2.7" font-weight="800" fill="' + pzTokNumFill(tk.kind) + '" text-anchor="middle" dominant-baseline="central">' + tk.num + '</text>';
   }
   const ring = sel ? '<circle r="4.2" fill="none" stroke="#fff" stroke-width=".35" stroke-dasharray="1 .8"/>' : '';
   const lbl = pzTokShortLabel(tk);
@@ -4637,14 +4829,21 @@ function pzGoFrame(i){
 }
 function pzAddFrame(){
   if (pzPlaying) return;
+  pzPushUndo();
   pzStorePos();
-  pz.board.frames.splice(pzFrame + 1, 0, { pos:pzPosSnapshot() });
-  pzFrame++;
+  // El paso nuevo va SIEMPRE al final (continúa la animación), copiando
+  // las posiciones del último paso — antes se metía después del paso
+  // seleccionado y en ejercicios guardados quedaba al principio.
+  const last = pz.board.frames[pz.board.frames.length - 1];
+  pz.board.frames.push({ pos: JSON.parse(JSON.stringify(last.pos || {})) });
+  pzFrame = pz.board.frames.length - 1;
+  pzLoadPos(pzFrame);
   pzRenderFrames(); pzRenderBoard();
-  toast('Paso ' + (pzFrame + 1) + ': mové las fichas a la posición que sigue');
+  toast('Paso ' + (pzFrame + 1) + ' agregado al final: mové las fichas a la posición que sigue');
 }
 function pzDelFrame(){
   if (pzPlaying || pz.board.frames.length < 2) return;
+  pzPushUndo();
   pz.board.frames.splice(pzFrame, 1);
   pzFrame = Math.max(0, pzFrame - 1);
   pzLoadPos(pzFrame);
@@ -4716,22 +4915,58 @@ function pzCanvasDraw(ctx, W, pos, board){
   [[34, 52.5], [34, 13], [34, 92]].forEach(c => { ctx.beginPath(); ctx.arc(c[0], c[1], .7, 0, 7); ctx.fill(); });
   ctx.strokeRect(13.84, 2, 40.32, 16.5); ctx.strokeRect(24.84, 2, 18.32, 5.5);
   ctx.strokeRect(13.84, 86.5, 40.32, 16.5); ctx.strokeRect(24.84, 97.5, 18.32, 5.5);
-  if (b.guide){
+  // medias lunas, córners y arcos (igual que el SVG)
+  ctx.beginPath(); ctx.arc(34, 13, 9.15, 0.6435, 2.4981); ctx.stroke();
+  ctx.beginPath(); ctx.arc(34, 92, 9.15, -2.4981, -0.6435); ctx.stroke();
+  ctx.beginPath(); ctx.arc(2, 2, 1, 0, Math.PI / 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(66, 2, 1, Math.PI / 2, Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(2, 103, 1, -Math.PI / 2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(66, 103, 1, Math.PI, Math.PI * 1.5); ctx.stroke();
+  ctx.strokeRect(30.34, 0.4, 7.32, 1.6); ctx.strokeRect(30.34, 103, 7.32, 1.6);
+  const gg = pzGuideNorm(b.guide);
+  if (gg.tipo){
     ctx.strokeStyle = 'rgba(248,250,252,.35)'; ctx.lineWidth = .25; ctx.setLineDash([1.2, 1.2]);
     const gl = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
-    if (b.guide === 'grid' || b.guide === 'carriles') for (let i = 1; i < 5; i++) gl(2 + 64 * i / 5, 2, 2 + 64 * i / 5, 103);
-    if (b.guide === 'grid') for (let j = 1; j < 7; j++) gl(2, 2 + 101 * j / 7, 66, 2 + 101 * j / 7);
-    if (b.guide === 'tercios'){ gl(2, 2 + 101 / 3, 66, 2 + 101 / 3); gl(2, 2 + 202 / 3, 66, 2 + 202 / 3); }
+    if (gg.tipo === 'grid'){
+      for (let i = 1; i < gg.cols; i++) gl(2 + 64 * i / gg.cols, 2, 2 + 64 * i / gg.cols, 103);
+      for (let j = 1; j < gg.rows; j++) gl(2, 2 + 101 * j / gg.rows, 66, 2 + 101 * j / gg.rows);
+    }
+    if (gg.tipo === 'carriles') for (let i = 1; i < 5; i++) gl(2 + 64 * i / 5, 2, 2 + 64 * i / 5, 103);
+    if (gg.tipo === 'tercios'){ gl(2, 2 + 101 / 3, 66, 2 + 101 / 3); gl(2, 2 + 202 / 3, 66, 2 + 202 / 3); }
     ctx.setLineDash([]);
+    if (gg.nums){
+      ctx.font = '700 1.9px sans-serif'; ctx.fillStyle = 'rgba(248,250,252,.55)';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      if (gg.tipo === 'grid'){
+        let n = 0;
+        for (let r = 0; r < gg.rows; r++) for (let c = 0; c < gg.cols; c++){
+          n++;
+          ctx.fillText(String(n), 2 + 64 * c / gg.cols + 0.8, 2 + 101 * r / gg.rows + 2.6);
+        }
+      } else if (gg.tipo === 'carriles'){
+        for (let i = 0; i < 5; i++) ctx.fillText(String(i + 1), 2 + 64 * i / 5 + 0.8, 4.6);
+      }
+    }
   }
   b.zones.forEach(z => {
     const col = PZ_ZONE_COLORS[z.color % PZ_ZONE_COLORS.length];
+    const zcx = z.x + z.w / 2, zcy = z.y + z.h / 2;
+    ctx.save();
+    if (z.rot){ ctx.translate(zcx, zcy); ctx.rotate(z.rot * Math.PI / 180); ctx.translate(-zcx, -zcy); }
     ctx.beginPath();
-    if (z.shape === 'circle') ctx.ellipse(z.x + z.w / 2, z.y + z.h / 2, z.w / 2, z.h / 2, 0, 0, 7);
-    else if (z.shape === 'tri'){ ctx.moveTo(z.x + z.w / 2, z.y); ctx.lineTo(z.x, z.y + z.h); ctx.lineTo(z.x + z.w, z.y + z.h); ctx.closePath(); }
+    if (z.shape === 'circle') ctx.ellipse(zcx, zcy, z.w / 2, z.h / 2, 0, 0, 7);
+    else if (z.shape === 'tri'){ ctx.moveTo(zcx, z.y); ctx.lineTo(z.x, z.y + z.h); ctx.lineTo(z.x + z.w, z.y + z.h); ctx.closePath(); }
     else ctx.rect(z.x, z.y, z.w, z.h);
     ctx.globalAlpha = .28; ctx.fillStyle = col; ctx.fill();
     ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.setLineDash([1.6, 1]); ctx.stroke(); ctx.setLineDash([]);
+    if (z.label){
+      let lbl = String(z.label);
+      if (lbl.length > 18) lbl = lbl.slice(0, 17) + '…';
+      ctx.font = '700 2.2px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = .28; ctx.strokeStyle = '#0f172a'; ctx.strokeText(lbl, zcx, zcy);
+      ctx.fillStyle = '#fff'; ctx.fillText(lbl, zcx, zcy);
+    }
+    ctx.restore();
   });
   (b.lines || []).forEach(ln => {
     const col = PZ_ZONE_COLORS[ln.color % PZ_ZONE_COLORS.length];
@@ -4758,12 +4993,12 @@ function pzCanvasDraw(ctx, W, pos, board){
       ctx.beginPath(); ctx.arc(0, -2.9, 1.35, 0, 7); ctx.fillStyle = '#eab188'; ctx.fill();
       const shirt = new Path2D(PZ_SHIRT_PATH);
       ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill(shirt);
-      ctx.lineWidth = .18; ctx.strokeStyle = '#f8fafc'; ctx.stroke(shirt);
-      ctx.font = '700 2px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(String(t.num), 0, 1.4);
+      ctx.lineWidth = .18; ctx.strokeStyle = pzTokStroke(t.kind); ctx.stroke(shirt);
+      ctx.font = '700 2px sans-serif'; ctx.fillStyle = pzTokNumFill(t.kind); ctx.fillText(String(t.num), 0, 1.4);
     } else {
       ctx.beginPath(); ctx.arc(0, 0, 2.9, 0, 7); ctx.fillStyle = PZ_TEAM_COLORS[t.kind]; ctx.fill();
-      ctx.lineWidth = .35; ctx.strokeStyle = '#f8fafc'; ctx.stroke();
-      ctx.font = '800 2.7px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(String(t.num), 0, .1);
+      ctx.lineWidth = .35; ctx.strokeStyle = pzTokStroke(t.kind); ctx.stroke();
+      ctx.font = '800 2.7px sans-serif'; ctx.fillStyle = pzTokNumFill(t.kind); ctx.fillText(String(t.num), 0, .1);
     }
     const lbl = pzTokShortLabel(t);
     if (lbl){
@@ -4941,6 +5176,7 @@ function pzXY(e){
     }
     const parts = g.getAttribute('data-pz').split(':');
     const kind = parts[0], id = parts[1];
+    if (Object.keys(pzDrag).length === 0 && !pzRot) pzPushUndo();   // 1 deshacer por gesto
     if (kind === 'tok'){
       const tk = pz.board.tokens.find(t => t.id === id);
       if (!tk) return;
