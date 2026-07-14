@@ -1030,6 +1030,247 @@ function posKeyLabel(key){
   return t;
 }
 function lastOf(arr){ return (arr && arr.length) ? arr[arr.length-1] : null; }
+
+/* --- saneo de archivos importados (fichas, ejercicios, backups) ---
+   Un archivo craftado podría traer HTML/comillas en ids (que van a
+   onclick/data-*) o strings donde se esperan números (que se renderizan
+   sin esc). TODO lo que entra por importación pasa por estas funciones. */
+function safeId(v){
+  const s = String(v == null ? '' : v);
+  return /^[A-Za-z0-9_.:-]{1,80}$/.test(s) ? s : (s.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 80) || uid());
+}
+function numOr(v, dflt){
+  if (v === '' || v == null) return dflt;
+  const n = Number(v);
+  return isNaN(n) ? dflt : n;
+}
+function strOr(v){ return v == null ? '' : String(v); }
+function intIn(v, min, max, dflt){
+  if (v === '' || v == null) return dflt;
+  const n = Math.round(Number(v));
+  return (isNaN(n) || n < min || n > max) ? dflt : n;
+}
+function sanitizePlayer(p){
+  p.id = safeId(p.id);
+  p.teamId = safeId(p.teamId);
+  p.nombre = strOr(p.nombre);
+  p.apellido = strOr(p.apellido);
+  p.nacimiento = strOr(p.nacimiento);
+  p.desdeTemporada = strOr(p.desdeTemporada);
+  p.notas = strOr(p.notas);
+  p.creado = strOr(p.creado);
+  p.fotoId = p.fotoId ? safeId(p.fotoId) : null;
+  const lat = p.lateralidad || {};
+  p.lateralidad = { pie:strOr(lat.pie), mano:strOr(lat.mano), ojo:strOr(lat.ojo) };
+  const fis = p.fisico || {};
+  p.fisico = {
+    peso:(Array.isArray(fis.peso) ? fis.peso : [])
+      .map(m => ({ fecha:strOr(m && m.fecha), kg:numOr(m && m.kg, null) })).filter(m => m.kg != null),
+    altura:(Array.isArray(fis.altura) ? fis.altura : [])
+      .map(m => ({ fecha:strOr(m && m.fecha), cm:numOr(m && m.cm, null) })).filter(m => m.cm != null)
+  };
+  const ant = p.antecedentes || {};
+  p.antecedentes = { aniosPractica:numOr(ant.aniosPractica, null), otrosDeportes:strOr(ant.otrosDeportes) };
+  const po = p.posicion || {};
+  p.posicion = { linea:strOr(po.linea), rol:strOr(po.rol),
+                 otros:(Array.isArray(po.otros) ? po.otros : []).map(strOr),
+                 preferida:strOr(po.preferida) };
+  p.historialEquipos = (Array.isArray(p.historialEquipos) ? p.historialEquipos : [])
+    .map(h => ({ teamId:safeId(h && h.teamId), desde:strOr(h && h.desde), hasta:(h && h.hasta) ? strOr(h.hasta) : null }));
+  p.lesiones = (Array.isArray(p.lesiones) ? p.lesiones : [])
+    .map(l => ({ fecha:strOr(l && l.fecha), tipo:strOr(l && l.tipo), diasBaja:numOr(l && l.diasBaja, null), notas:strOr(l && l.notas) }));
+  p.objetivos = (Array.isArray(p.objetivos) ? p.objetivos : [])
+    .map(o => ({ texto:strOr(o && o.texto), creado:strOr(o && o.creado), cumplido:(o && o.cumplido) ? strOr(o.cumplido) : null }));
+  return p;
+}
+function sanitizeBoard(b){
+  b = (b && typeof b === 'object') ? b : {};
+  b.view = b.view === 'figs' ? 'figs' : 'chips';
+  const KINDS = { A:1, B:1, C:1, D:1, ball:1 };
+  const remap = {};
+  b.tokens = (Array.isArray(b.tokens) ? b.tokens : []).map(t => {
+    t = t || {};
+    const nid = safeId(t.id);
+    remap[String(t.id)] = nid;
+    const tk = { id:nid, kind:KINDS[t.kind] ? t.kind : 'A',
+                 num:numOr(t.num, 0), x:numOr(t.x, 34), y:numOr(t.y, 52.5) };
+    if (t.label != null && t.label !== '') tk.label = strOr(t.label);
+    if (t.pid != null) tk.pid = safeId(t.pid);
+    return tk;
+  });
+  const SHAPES = { rect:1, circle:1, tri:1 };
+  b.zones = (Array.isArray(b.zones) ? b.zones : []).map(z => {
+    z = z || {};
+    const o = { id:safeId(z.id), shape:SHAPES[z.shape] ? z.shape : 'rect',
+                x:numOr(z.x, 20), y:numOr(z.y, 40), w:numOr(z.w, 16), h:numOr(z.h, 16),
+                color:intIn(z.color, 0, 99, 0) };
+    if (z.rot) o.rot = numOr(z.rot, 0);
+    if (z.label != null && z.label !== '') o.label = strOr(z.label);
+    return o;
+  });
+  const LTIPOS = { flecha:1, punteada:1, linea:1 };
+  b.lines = (Array.isArray(b.lines) ? b.lines : []).map(l => {
+    l = l || {};
+    return { id:safeId(l.id), tipo:LTIPOS[l.tipo] ? l.tipo : 'flecha',
+             x1:numOr(l.x1, 20), y1:numOr(l.y1, 44), x2:numOr(l.x2, 44), y2:numOr(l.y2, 58),
+             color:intIn(l.color, 0, 99, 0) };
+  });
+  const g = pzGuideNorm(b.guide);
+  if (!{ '':1, grid:1, tercios:1, carriles:1 }[g.tipo]) g.tipo = '';
+  g.cols = intIn(g.cols, 2, 12, 5); g.rows = intIn(g.rows, 2, 16, 7);
+  b.guide = g;
+  b.frames = (Array.isArray(b.frames) ? b.frames : []).map(f => {
+    const pos = {};
+    Object.keys((f && f.pos) || {}).forEach(k => {
+      const nk = remap[k] !== undefined ? remap[k] : safeId(k);
+      const q = f.pos[k] || {};
+      pos[nk] = { x:numOr(q.x, 34), y:numOr(q.y, 52.5) };
+    });
+    return { pos };
+  });
+  if (!b.frames.length) b.frames = [{ pos:{} }];
+  return b;
+}
+function sanitizeExercise(e){
+  e.id = safeId(e.id);
+  e.teamId = safeId(e.teamId);
+  e.creado = strOr(e.creado);
+  e.nombre = strOr(e.nombre);
+  e.descripcion = strOr(e.descripcion);
+  e.materiales = strOr(e.materiales);
+  e.carpeta = e.carpeta ? safeId(e.carpeta) : null;
+  e.categoria = e.categoria ? safeId(e.categoria) : null;
+  e.jugadores = (Array.isArray(e.jugadores) ? e.jugadores : []).map(safeId);
+  const c = e.carga || {};
+  e.carga = { dur:numOr(c.dur, null), series:numOr(c.series, null), reps:numOr(c.reps, null),
+              pasada:numOr(c.pasada, null), descanso:numOr(c.descanso, null), intensidad:strOr(c.intensidad) };
+  const pl = e.plan || {};
+  e.plan = { dia:intIn(pl.dia, 0, 6, null), micro:strOr(pl.micro), etapa:strOr(pl.etapa) };
+  e.board = sanitizeBoard(e.board);
+  e.media = (Array.isArray(e.media) ? e.media : []).map(m => ({
+    id:safeId(m && m.id), videoId:safeId(m && m.videoId), imgId:safeId(m && m.imgId),
+    fecha:strOr(m && m.fecha), mime:strOr(m && m.mime) }));
+  e.hist = (Array.isArray(e.hist) ? e.hist : [])
+    .map(h => ({ fecha:strOr(h && h.fecha), board:sanitizeBoard(h && h.board) })).slice(-5);
+  return e;
+}
+// Saneo del estado completo (backup importado). No cambia datos legítimos:
+// para un backup real todas las coerciones son no-op.
+function sanitizeState(d){
+  d.teams = (Array.isArray(d.teams) ? d.teams : []).map(t => {
+    t = t || {};
+    t.id = safeId(t.id); t.nombre = strOr(t.nombre); t.creado = strOr(t.creado);
+    t.escudoId = t.escudoId ? safeId(t.escudoId) : null;
+    if (t.categorias) t.categorias = (Array.isArray(t.categorias) ? t.categorias : []).map(c => ({
+      id:safeId(c && c.id), nombre:strOr(c && c.nombre),
+      desde:numOr(c && c.desde, 0), hasta:numOr(c && c.hasta, 0),
+      dias:(Array.isArray(c && c.dias) ? c.dias : []).map(x => intIn(x, 0, 6, 0)),
+      hora:strOr(c && c.hora) }));
+    return t;
+  });
+  (d.players || []).forEach(sanitizePlayer);
+  // OJO: los campos ausentes se dejan ausentes (los defaults DEF_* los ponen
+  // loadData / importBackupFile; un array vacío acá los pisaría).
+  if (d.testDefs) d.testDefs = d.testDefs.map(t => {
+    t = t || {};
+    const o = { id:safeId(t.id), nombre:strOr(t.nombre), unidad:strOr(t.unidad),
+      tipo:{ numero:1, tiempo:1, texto:1 }[t.tipo] ? t.tipo : 'numero',
+      mejorEs:t.mejorEs === 'menor' ? 'menor' : 'mayor' };
+    if (t.descripcion) o.descripcion = strOr(t.descripcion);
+    if (t.archivada) o.archivada = true;
+    if (t.grupos && typeof t.grupos === 'object'){
+      o.grupos = { modo:t.grupos.modo === 'umbral' ? 'umbral' : 'auto' };
+      if (Array.isArray(t.grupos.cortes)) o.grupos.cortes = t.grupos.cortes.map(x => numOr(x, 0));
+    }
+    return o;
+  });
+  (d.testSessions || []).forEach(s => {
+    s.id = safeId(s.id); s.teamId = safeId(s.teamId); s.fecha = strOr(s.fecha);
+    s.pruebas = (Array.isArray(s.pruebas) ? s.pruebas : []).map(safeId);
+    const res = {};
+    Object.keys(s.resultados || {}).forEach(pid => {
+      const row = s.resultados[pid] || {}, o = {};
+      Object.keys(row).forEach(did => {
+        const v = row[did];
+        o[safeId(did)] = (typeof v === 'number') ? v : strOr(v);
+      });
+      res[safeId(pid)] = o;
+    });
+    s.resultados = res;
+    if (s.vueltas){
+      const vu = {};
+      Object.keys(s.vueltas).forEach(pid => {
+        const row = s.vueltas[pid] || {}, o = {};
+        Object.keys(row).forEach(did => {
+          o[safeId(did)] = (Array.isArray(row[did]) ? row[did] : []).map(x => numOr(x, 0));
+        });
+        vu[safeId(pid)] = o;
+      });
+      s.vueltas = vu;
+    }
+  });
+  (d.matches || []).forEach(m => {
+    m.id = safeId(m.id); m.teamId = safeId(m.teamId); m.fecha = strOr(m.fecha);
+    m.rival = strOr(m.rival);
+    m.categoria = m.categoria ? safeId(m.categoria) : null;
+    m.golesFavor = numOr(m.golesFavor, null); m.golesContra = numOr(m.golesContra, null);
+    m.duracion = numOr(m.duracion, 60);
+    m.titulares = (Array.isArray(m.titulares) ? m.titulares : []).map(safeId);
+    m.cambios = (Array.isArray(m.cambios) ? m.cambios : [])
+      .map(c => ({ min:numOr(c && c.min, 0), sale:safeId(c && c.sale), entra:safeId(c && c.entra) }));
+    const st = {};
+    Object.keys(m.stats || {}).forEach(pid => {
+      const row = m.stats[pid] || {}, o = {};
+      Object.keys(row).forEach(k => { o[safeId(k)] = numOr(row[k], 0); });
+      st[safeId(pid)] = o;
+    });
+    m.stats = st;
+  });
+  (d.attendance || []).forEach(a => {
+    a.id = safeId(a.id); a.teamId = safeId(a.teamId); a.fecha = strOr(a.fecha);
+    a.catId = a.catId ? safeId(a.catId) : null;
+    const mk = {};
+    Object.keys(a.marks || {}).forEach(pid => {
+      const v = a.marks[pid];
+      if (v === 'P' || v === 'A' || v === 'L') mk[safeId(pid)] = v;
+    });
+    a.marks = mk;
+    if (a.durMin != null) a.durMin = numOr(a.durMin, null);
+    if (a.rpe){
+      const rp = {};
+      Object.keys(a.rpe).forEach(pid => { const n = intIn(a.rpe[pid], 1, 10, null); if (n) rp[safeId(pid)] = n; });
+      a.rpe = rp;
+    }
+  });
+  (d.evaluations || []).forEach(e => {
+    e.id = safeId(e.id); e.playerId = safeId(e.playerId); e.teamId = safeId(e.teamId);
+    e.fecha = strOr(e.fecha);
+    const sc = {};
+    Object.keys(e.scores || {}).forEach(k => { const n = numOr(e.scores[k], null); if (n != null) sc[safeId(k)] = n; });
+    e.scores = sc;
+  });
+  if (d.evalAspects) d.evalAspects = d.evalAspects.map(a => {
+    const o = { id:safeId(a && a.id), nombre:strOr(a && a.nombre) };
+    if (a && a.archivada) o.archivada = true;
+    return o;
+  });
+  if (d.grupos) d.grupos = (Array.isArray(d.grupos) ? d.grupos : []).map((g, i) => ({
+    id:safeId(g && g.id), nombre:strOr(g && g.nombre),
+    color:/^#[0-9a-fA-F]{3,8}$/.test(g && g.color) ? g.color : DEF_GRUPOS[i % 3].color }));
+  (d.exercises || []).forEach(sanitizeExercise);
+  (d.trainSessions || []).forEach(s => {
+    s.id = safeId(s.id); s.teamId = safeId(s.teamId);
+    s.creado = strOr(s.creado); s.nombre = strOr(s.nombre); s.notas = strOr(s.notas);
+    s.fecha = s.fecha ? strOr(s.fecha) : null;
+    s.categoria = s.categoria ? safeId(s.categoria) : null;
+    s.bloques = (Array.isArray(s.bloques) ? s.bloques : []).map(b => ({
+      id:safeId(b && b.id), tipo:{ cal:1, ppal:1, vc:1 }[b && b.tipo] ? b.tipo : 'ppal',
+      exId:(b && b.exId) ? safeId(b.exId) : null, titulo:strOr(b && b.titulo),
+      min:numOr(b && b.min, null) }));
+  });
+  if (d.folders) d.folders = (Array.isArray(d.folders) ? d.folders : []).map(f => ({ id:safeId(f && f.id), nombre:strOr(f && f.nombre) }));
+  return d;
+}
 function toast(msg, isErr){
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
@@ -1152,6 +1393,40 @@ function deletePhoto(id){
   }).catch(() => {});
 }
 function getPhoto(id){ return id ? (_photoCache[id] || null) : null; }
+// Limpieza tras importar un backup: fotos de IndexedDB que el estado nuevo no
+// referencia (quedarían huérfanas ocupando espacio para siempre).
+function pruneOrphanPhotos(){
+  const ref = {};
+  S.players.forEach(p => { if (p.fotoId) ref[p.fotoId] = 1; });
+  S.teams.forEach(t => { if (t.escudoId) ref[t.escudoId] = 1; });
+  Object.keys(_photoCache).forEach(id => { if (!ref[id]) deletePhoto(id); });
+}
+// Ídem para el store `media` (videos de la pizarra): borra blobs que ningún
+// ejercicio referencia y saca de los ejercicios las entradas de multimedia
+// cuyo blob no está en este dispositivo (backup importado de otro aparato —
+// los videos no viajan en el backup).
+function syncMediaStore(){
+  return _pdb().then(db => new Promise(res => {
+    const st = db.transaction('media', 'readwrite').objectStore('media');
+    const rq = st.getAllKeys();
+    rq.onsuccess = () => {
+      const have = {};
+      (rq.result || []).forEach(k => { have[k] = 1; });
+      const ref = {};
+      S.exercises.forEach(e => (e.media || []).forEach(m => { ref[m.videoId] = 1; ref[m.imgId] = 1; }));
+      (rq.result || []).forEach(k => { if (!ref[k]) st.delete(k); });
+      let changed = false;
+      S.exercises.forEach(e => {
+        if (!(e.media || []).length) return;
+        const kept = e.media.filter(m => have[m.videoId]);
+        if (kept.length !== e.media.length){ e.media = kept; changed = true; }
+      });
+      if (changed) saveData();
+      res();
+    };
+    rq.onerror = () => res();
+  })).catch(() => {});
+}
 function hydratePhotoCache(){
   return _pdb().then(db => new Promise(res => {
     const tx = db.transaction('photos');
@@ -1364,9 +1639,26 @@ async function teamDelete(id){
     toast('El equipo tiene jugadores: movelos o borralos antes', true);
     return;
   }
-  const ok = await appConfirm('Borrar equipo', '¿Borrar "' + t.nombre + '"? Esta acción no se puede deshacer.', { okLabel:'Borrar', danger:true });
+  const ok = await appConfirm('Borrar equipo',
+    '¿Borrar "' + t.nombre + '"? Se borran también sus ejercicios de pizarra, sesiones y registros ' +
+    '(los partidos, jornadas y listas donde participan jugadores tuyos actuales se conservan para su historial). Esta acción no se puede deshacer.',
+    { okLabel:'Borrar', danger:true });
   if (!ok) return;
   if (t.escudoId) deletePhoto(t.escudoId);
+  // Limpieza en cascada. OJO: la ficha de un jugador movido lee partidos,
+  // jornadas y asistencia de TODOS los equipos → solo se borran los registros
+  // del equipo que no tienen datos de ningún jugador existente.
+  const alive = {};
+  S.players.forEach(p => { alive[p.id] = 1; });
+  const hasAlive = obj => Object.keys(obj || {}).some(pid => alive[pid]);
+  S.matches = S.matches.filter(m => m.teamId !== id || Object.keys(participantsOf(m)).some(pid => alive[pid]));
+  S.testSessions = S.testSessions.filter(s => s.teamId !== id || hasAlive(s.resultados));
+  S.attendance = S.attendance.filter(a => a.teamId !== id || hasAlive(a.marks));
+  S.evaluations = S.evaluations.filter(e => e.teamId !== id || alive[e.playerId]);
+  S.exercises.filter(e => e.teamId === id).forEach(e =>
+    (e.media || []).forEach(m => { deleteMedia(m.videoId); deleteMedia(m.imgId); }));
+  S.exercises = S.exercises.filter(e => e.teamId !== id);
+  S.trainSessions = S.trainSessions.filter(s => s.teamId !== id);
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
@@ -1463,16 +1755,31 @@ async function catDelete(id){
   const c = teamCats(t).find(x => x.id === id);
   if (!c) return;
   const ok = await appConfirm('Borrar categoría',
-    '¿Borrar "' + c.nombre + '"? Los partidos que la usaban quedan sin categoría (muestran todo el plantel).',
+    '¿Borrar "' + c.nombre + '"? Los partidos que la usaban quedan sin categoría (muestran todo el plantel) y sus listas de asistencia pasan a "Todo el equipo".',
     { okLabel:'Borrar', danger:true });
   if (!ok) return;
   t.categorias = t.categorias.filter(x => x.id !== id);
   S.matches.forEach(m => { if (m.teamId === t.id && m.categoria === id) m.categoria = null; });
   S.exercises.forEach(e => { if (e.teamId === t.id && e.categoria === id) e.categoria = null; });
   S.trainSessions.forEach(s => { if (s.teamId === t.id && s.categoria === id) s.categoria = null; });
+  // Las listas de asistencia de la categoría pasan a "Todo el equipo" (si no,
+  // quedan invisibles y se pierde el historial). Si ya hay una lista del
+  // equipo en la misma fecha, se fusionan las marcas.
+  S.attendance.filter(a => a.teamId === t.id && a.catId === id).forEach(a => {
+    const tgt = S.attendance.find(b => b !== a && b.teamId === t.id && !b.catId && b.fecha === a.fecha);
+    if (tgt){
+      tgt.marks = Object.assign({}, a.marks, tgt.marks);
+      if (a.rpe || tgt.rpe) tgt.rpe = Object.assign({}, a.rpe, tgt.rpe);
+      if (tgt.durMin == null && a.durMin != null) tgt.durMin = a.durMin;
+      a._drop = true;
+    } else {
+      a.catId = null;
+    }
+  });
+  S.attendance = S.attendance.filter(a => !a._drop);
   if (jugCat === id) jugCat = '';
   saveData();
-  renderCatsList(); renderPlayers(); renderPartidos(); renderTeams();
+  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderTeams();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1809,20 +2116,13 @@ function importPlayerFile(ev){
     try {
       const j = JSON.parse(rd.result);
       if (!j || j._type !== 'pc_player_v1' || !j.player || !j.player.nombre) throw 0;
-      const p = j.player;
+      const p = sanitizePlayer(j.player);   // el archivo puede venir de cualquier lado: sanear todo
       if (S.players.some(x => x.id === p.id)) p.id = uid();
       const cur = lastOf(p.historialEquipos || []);
       if (cur && !cur.hasta) cur.hasta = todayISO();
-      p.historialEquipos = p.historialEquipos || [];
       p.historialEquipos.push({ teamId:t.id, desde:todayISO(), hasta:null });
       p.teamId = t.id;
-      p.fisico = p.fisico || { peso:[], altura:[] };
-      p.lateralidad = p.lateralidad || { pie:'', mano:'', ojo:'' };
-      p.antecedentes = p.antecedentes || { aniosPractica:null, otrosDeportes:'' };
-      p.posicion = p.posicion || { linea:'', rol:'' };
-      p.posicion.otros = Array.isArray(p.posicion.otros) ? p.posicion.otros : [];
-      p.posicion.preferida = p.posicion.preferida || '';
-      p.fotoId = j.photo ? savePhoto(j.photo) : null;   // la foto viaja en el archivo
+      p.fotoId = (j.photo && /^data:image\//.test(String(j.photo))) ? savePhoto(String(j.photo)) : null;   // la foto viaja en el archivo
       S.players.push(p);
       saveData();
       switchTab('jugadores');
@@ -1864,15 +2164,15 @@ function parseTiempo(str){
 }
 function fmtTiempo(sec){
   sec = Number(sec) || 0;
-  const m = Math.floor(sec / 60);
-  const s = Math.round((sec - m * 60) * 10) / 10;
+  let m = Math.floor(sec / 60);
+  let s = Math.round((sec - m * 60) * 10) / 10;
+  if (s >= 60){ m++; s = 0; }   // 119.96 s redondeaba a "1:60"
   return m + ':' + (s < 10 ? '0' : '') + s;
 }
 function fmtTestVal(def, v){
   if (v === undefined || v === null || v === '') return '—';
   if (def.tipo === 'tiempo') return fmtTiempo(v);
-  if (def.tipo === 'texto') return esc(String(v));
-  return v + (def.unidad ? ' ' + esc(def.unidad) : '');
+  return esc(String(v)) + (def.tipo !== 'texto' && def.unidad ? ' ' + esc(def.unidad) : '');
 }
 function testSub(d){
   const tipo = d.tipo === 'tiempo' ? 'tiempo' : (d.tipo === 'texto' ? 'texto' : 'número');
@@ -3474,6 +3774,13 @@ function openAsisId(id){
   openOverlay('ovAsis');
 }
 function closeAsis(){
+  // Si se abrió una lista y no se marcó nada, no dejar el registro vacío
+  // ensuciando el historial (abrir la lista la crea al toque).
+  const a = curAsis();
+  if (a && !Object.keys(a.marks || {}).length && !(a.rpe && Object.keys(a.rpe).length) && a.durMin == null){
+    S.attendance = S.attendance.filter(x => x.id !== a.id);
+    saveData();
+  }
   closeOverlay('ovAsis');
   asisOpenId = null;
   renderClases();
@@ -4192,18 +4499,12 @@ function exExport(id){
 function importExerciseJson(text, teamId){
   const j = JSON.parse(text);
   if (!j || j._type !== 'pc_exercise_v1' || !j.exercise || !j.exercise.nombre) return null;
-  const e = j.exercise;
+  const e = sanitizeExercise(j.exercise);   // el archivo puede venir de cualquier lado: sanear todo
   e.id = uid();
   e.teamId = teamId;
   e.creado = todayISO();
   e.categoria = null;
   e.jugadores = [];
-  e.carga = e.carga || {};
-  e.plan = e.plan || {};
-  e.board = e.board || { view:'chips', tokens:[], zones:[] };
-  e.board.tokens = e.board.tokens || [];
-  e.board.zones = e.board.zones || [];
-  e.board.lines = e.board.lines || [];
   e.media = [];
   e.hist = [];
   // la carpeta viaja solo si existe acá (las 7 de base comparten id)
@@ -5126,10 +5427,15 @@ async function pzMediaPlay(id){
   if (!m) return;
   const box = document.getElementById('mdv_' + id);
   if (!box) return;
-  if (box.innerHTML){ box.innerHTML = ''; return; }   // segundo toque: cerrar
+  if (box.innerHTML){   // segundo toque: cerrar (liberando el blob URL)
+    if (box.dataset.url){ URL.revokeObjectURL(box.dataset.url); delete box.dataset.url; }
+    box.innerHTML = '';
+    return;
+  }
   const blob = await getMedia(m.videoId);
   if (!blob){ toast('No se encontró el video guardado', true); return; }
   const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob], { type:m.mime || 'video/webm' }));
+  box.dataset.url = url;
   box.innerHTML = '<video controls playsinline autoplay muted loop style="width:100%;border-radius:10px;margin-top:10px" src="' + url + '"></video>';
 }
 async function pzMediaDownload(id){
@@ -6432,14 +6738,12 @@ function importBackupFile(ev){
         ' jugadores) por los del archivo (' + j.data.teams.length + ' equipos, ' + (j.data.players || []).length + ' jugadores). ¿Seguir?',
         { okLabel:'Reemplazar', danger:true });
       if (!ok) return;
-      if (j.photos) Object.keys(j.photos).forEach(id => savePhoto(j.photos[id], id));
+      if (j.photos) Object.keys(j.photos).forEach(id => {
+        if (/^data:image\//.test(String(j.photos[id]))) savePhoto(String(j.photos[id]), safeId(id));
+      });
       S = j.data;
       S.players = S.players || [];
-      S.players.forEach(p => {
-        p.posicion = p.posicion || { linea:'', rol:'' };
-        if (!Array.isArray(p.posicion.otros)) p.posicion.otros = [];
-        if (p.posicion.preferida == null) p.posicion.preferida = '';
-      });
+      sanitizeState(S);   // el archivo puede venir de cualquier lado: sanear todo
       S.testDefs = S.testDefs || DEF_TESTDEFS.slice();
       S.testSessions = S.testSessions || [];
       S.matches = S.matches || [];
@@ -6453,6 +6757,11 @@ function importBackupFile(ev){
       UI.teamId = S.teams.length ? S.teams[0].id : null;
       UI.crono = null;   // una tanda en marcha ya no aplica a los datos importados
       saveData(); saveUI();
+      // limpieza de IndexedDB: fotos que ya nadie referencia + videos de la
+      // pizarra (blobs huérfanos y entradas sin blob si el backup vino de
+      // otro dispositivo — los videos no viajan)
+      pruneOrphanPhotos();
+      syncMediaStore();
       renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
       toast('Copia importada');
     } catch(e){
