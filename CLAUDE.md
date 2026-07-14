@@ -133,6 +133,11 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 - Fechas de calendario SIEMPRE en local (`todayISO`, `fmtFecha`, `dowOf`
   parsean por partes) — nunca `toISOString().slice(0,10)`.
 - Escapar TODO dato de usuario con `esc()` antes de meterlo en `innerHTML`.
+- TODO lo que entra por importación de archivos (ficha, ejercicio, backup)
+  pasa por `sanitizePlayer` / `sanitizeExercise` / `sanitizeState`
+  (js/state.js): ids con whitelist, números coercionados. Si se agrega un
+  campo nuevo al modelo, agregarlo también ahí (y a los defaults de
+  `loadData()` / `importBackupFile()`).
 - Los minutos de partido NO se guardan: se derivan (`minutosDe`). Los ids
   internos (`testDefs`, aspectos `a_*`, categorías) no se renombran.
 - El repo se sirve TAL CUAL como assets: nada de secretos/tokens en el repo;

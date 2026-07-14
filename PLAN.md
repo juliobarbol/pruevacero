@@ -252,6 +252,64 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
+### Auditoría QA completa (2026-07-14) — arreglos publicados
+
+Se auditaron las 31 etapas juntas (122 checks funcionales headless, en 2
+suites: flujos/datos/XSS y pizarra/sesiones/rendimiento). Arreglado:
+
+- **🔴 XSS por archivos importados**: una ficha de jugador, un ejercicio
+  compartido o un backup craftados podían inyectar HTML/JS vía ids (van a
+  `onclick`/`data-*`) o campos "numéricos" que se renderizan sin `esc()`
+  (peso, días de baja, resultados). Ahora TODO lo que entra por importación
+  pasa por `sanitizePlayer` / `sanitizeExercise` / `sanitizeState` (en
+  `js/state.js`): ids con whitelist de caracteres, números coercionados,
+  strings tipadas. `fmtTestVal` además escapa siempre el valor.
+- **🔴 Borrar una categoría dejaba sus listas de asistencia inaccesibles**
+  (quedaban con `catId` muerto y no aparecían en ninguna vista). Ahora pasan
+  a "Todo el equipo", fusionándose con la lista de la misma fecha si existe.
+- **🟡 Borrar un equipo dejaba huérfanos** partidos/jornadas/listas/
+  evaluaciones/ejercicios/sesiones (y videos en IndexedDB) para siempre.
+  Ahora se limpian en cascada, PERO se conservan los registros donde
+  participan jugadores existentes (la ficha de un jugador movido lee
+  partidos/pruebas/asistencia de todos los equipos — no perder su historial).
+- **🟡 Backup importado**: se sanea todo el estado, se podan fotos de
+  IndexedDB que ya nadie referencia y se sincroniza el store `media`
+  (blobs huérfanos afuera; entradas de multimedia sin blob —backup venido
+  de otro dispositivo— se quitan del ejercicio en vez de mostrar videos
+  que no abren). `pruneOrphanPhotos` / `syncMediaStore` en `js/photos.js`.
+- **🟡 `fmtTiempo` podía mostrar "1:60"** (redondeo de 119.96 s). Ahora
+  arrastra al minuto siguiente.
+- **🟡 Abrir una lista de asistencia y salir sin marcar** dejaba listas
+  vacías ensuciando el historial (abrirla la crea). `closeAsis` la borra si
+  quedó sin marcas/RPE/duración.
+- **🟡 Blob URLs sin revocar** al ver videos guardados de la pizarra
+  (fuga de memoria al abrir/cerrar repetidas veces). Se revocan al cerrar.
+
+Verificado además (sin bugs): minutos derivados de cambios, crono
+(vueltas/meta/deshacer/guardado en jornada), grupos auto/umbral, RPE y carga
+semanal, radar + promedio de categoría, pizarra completa (4 equipos, zonas
+rotadas, líneas, guías 2.0, pasos/deshacer/versiones —incluido deshacer tras
+restaurar—, duplicar, compartir/importar, biblioteca de 20), sesiones con
+ejercicio borrado, vista Semana cruzando el año, backup viejo sin campos
+nuevos (defaults migran bien), escapado de nombres con comillas/emoji/HTML
+en todas las vistas, y rendimiento con 126 jugadores × 220 listas × 70
+ejercicios × 40 partidos (todos los render < 200 ms reales).
+
+Hallazgos 🟢 menores anotados, a decisión de Julio (no tocados):
+- Tras cada release, Excel/PDF (CDN) necesitan internet UNA vez más (el
+  cache del SW es por versión y se limpia al actualizar).
+- Algunos inputs numéricos aceptan negativos tipeados a mano (peso,
+  duración de ejercicio); solo se ven raros, no rompen nada.
+- Borrar un jugador deja rastros benignos (marcas en listas viejas,
+  evaluaciones): las vistas los ignoran, pero los conteos ✔/✘ de listas
+  pasadas los incluyen.
+- Si se genera un video en un ejercicio NUEVO y se sale sin guardar, el
+  blob queda huérfano en IndexedDB (se limpia al importar un backup).
+- `e.hist` (5 versiones por ejercicio) pesa en localStorage con ejercicios
+  muy grandes; con 70 ejercicios el estado quedó < 4 MB, hay margen.
+- Cambiar de equipo activo con la ficha de un jugador abierta deja esa
+  ficha (del equipo anterior) abierta hasta cerrarla a mano.
+
 ### Pizarra táctica (pedido de Julio 2026-07-12, plan en 3 tandas)
 
 Julio pidió una pizarra táctica animada para planificar entrenamientos, con:
