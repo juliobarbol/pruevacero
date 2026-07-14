@@ -295,20 +295,32 @@ nuevos (defaults migran bien), escapado de nombres con comillas/emoji/HTML
 en todas las vistas, y rendimiento con 126 jugadores × 220 listas × 70
 ejercicios × 40 partidos (todos los render < 200 ms reales).
 
-Hallazgos 🟢 menores anotados, a decisión de Julio (no tocados):
-- Tras cada release, Excel/PDF (CDN) necesitan internet UNA vez más (el
-  cache del SW es por versión y se limpia al actualizar).
-- Algunos inputs numéricos aceptan negativos tipeados a mano (peso,
-  duración de ejercicio); solo se ven raros, no rompen nada.
-- Borrar un jugador deja rastros benignos (marcas en listas viejas,
-  evaluaciones): las vistas los ignoran, pero los conteos ✔/✘ de listas
-  pasadas los incluyen.
-- Si se genera un video en un ejercicio NUEVO y se sale sin guardar, el
-  blob queda huérfano en IndexedDB (se limpia al importar un backup).
-- `e.hist` (5 versiones por ejercicio) pesa en localStorage con ejercicios
-  muy grandes; con 70 ejercicios el estado quedó < 4 MB, hay margen.
-- Cambiar de equipo activo con la ficha de un jugador abierta deja esa
-  ficha (del equipo anterior) abierta hasta cerrarla a mano.
+Hallazgos 🟢 menores de la auditoría — **TODOS ARREGLADOS en la 2ª tanda
+(2026-07-14, pedido de Julio "empecemos a arreglarlo")**:
+- ✅ Excel/PDF ya NO necesitan internet tras cada release: las librerías de
+  CDN van a un cache del SW aparte y SIN versión (`CDN_CACHE =
+  'pruevacero-cdn-v1'`) que sobrevive a las actualizaciones. Las URLs del
+  CDN ya vienen versionadas, no hace falta invalidarlas.
+- ✅ Negativos tipeados a mano rechazados: peso/altura (form y medición de
+  la ficha), años de fútbol y toda la dosificación del ejercicio
+  (`pzCollect`) tratan los negativos como "sin dato".
+- ✅ Borrar un jugador limpia sus rastros: marcas y RPE en asistencia,
+  evaluaciones, resultados y vueltas de jornadas, vínculo en ejercicios
+  (`jugadores` y `pid` de fichas — la ficha dibujada queda con su nombre) y
+  selección del crono. Los PARTIDOS quedan tal cual A PROPÓSITO (sacar un
+  cambio alteraría los minutos derivados de los demás; se muestra "Jugador
+  borrado").
+- ✅ Video generado en un ejercicio NUEVO que se descarta: `pzBack` borra
+  los blobs de IndexedDB al salir sin guardar.
+- ✅ `e.hist` con tope de peso además del tope de 5 versiones: si el JSON
+  del historial pasa de ~300 KB se van soltando las versiones más viejas.
+- ✅ Cambiar de equipo activo cierra la ficha abierta del equipo anterior
+  (`teamPick`).
+
+Único pendiente (no es código, es un click en GitHub que debe dar Julio o
+quien administre el repo): cambiar la rama por defecto del repo a `main`
+(GitHub → Settings → General → Default branch). No afecta a la app
+publicada (Cloudflare ya despliega desde `main`).
 
 ### Pizarra táctica (pedido de Julio 2026-07-12, plan en 3 tandas)
 

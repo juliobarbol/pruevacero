@@ -1621,6 +1621,8 @@ function teamPick(id){
   UI.teamId = id; saveUI();
   renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra(); renderTeams();
   closeOverlay('ovTeams');
+  closeOverlay('ovFicha');   // si quedó abierta, muestra un jugador del equipo anterior
+  fichaId = null;
   switchTab('jugadores');
 }
 async function teamRename(id){
@@ -1929,8 +1931,8 @@ function savePlayer(){
   p.lateralidad.pie = document.getElementById('pfPie').value;
   p.lateralidad.mano = document.getElementById('pfMano').value;
   p.lateralidad.ojo = document.getElementById('pfOjo').value;
-  const anios = document.getElementById('pfAnios').value;
-  p.antecedentes.aniosPractica = anios === '' ? null : Number(anios);
+  const anios = Number(document.getElementById('pfAnios').value);
+  p.antecedentes.aniosPractica = (isNaN(anios) || document.getElementById('pfAnios').value === '' || anios < 0) ? null : anios;
   p.antecedentes.otrosDeportes = document.getElementById('pfOtros').value.trim();
   const linea = document.getElementById('pfLinea').value;
   p.posicion.linea = linea;
@@ -1941,11 +1943,12 @@ function savePlayer(){
   p.notas = document.getElementById('pfNotas').value.trim();
 
   // Peso / altura: si cambió el valor, se agrega una medición con fecha de hoy
-  const peso = document.getElementById('pfPeso').value;
-  const alt  = document.getElementById('pfAltura').value;
+  // (solo números positivos: un peso negativo tipeado a mano es un error)
+  const peso = Number(document.getElementById('pfPeso').value);
+  const alt  = Number(document.getElementById('pfAltura').value);
   const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
-  if (peso !== '' && (!lp || Number(peso) !== lp.kg)) p.fisico.peso.push({ fecha:todayISO(), kg:Number(peso) });
-  if (alt  !== '' && (!la || Number(alt)  !== la.cm)) p.fisico.altura.push({ fecha:todayISO(), cm:Number(alt) });
+  if (peso > 0 && (!lp || peso !== lp.kg)) p.fisico.peso.push({ fecha:todayISO(), kg:peso });
+  if (alt  > 0 && (!la || alt  !== la.cm)) p.fisico.altura.push({ fecha:todayISO(), cm:alt });
 
   saveData();
   closeOverlay('ovPlayerForm');
@@ -2052,11 +2055,11 @@ function fichaEdit(){ if (fichaId){ openPlayerForm(fichaId); } }
 function addMedicion(){
   const p = S.players.find(x => x.id === fichaId);
   if (!p) return;
-  const peso = document.getElementById('medPeso').value;
-  const alt = document.getElementById('medAltura').value;
-  if (peso === '' && alt === ''){ toast('Cargá peso y/o altura', true); return; }
-  if (peso !== '') p.fisico.peso.push({ fecha:todayISO(), kg:Number(peso) });
-  if (alt !== '') p.fisico.altura.push({ fecha:todayISO(), cm:Number(alt) });
+  const peso = Number(document.getElementById('medPeso').value);
+  const alt = Number(document.getElementById('medAltura').value);
+  if (!(peso > 0) && !(alt > 0)){ toast('Cargá peso y/o altura (números positivos)', true); return; }
+  if (peso > 0) p.fisico.peso.push({ fecha:todayISO(), kg:peso });
+  if (alt > 0) p.fisico.altura.push({ fecha:todayISO(), cm:alt });
   saveData();
   openFicha(fichaId);
   toast('Medición registrada');
@@ -2095,11 +2098,31 @@ async function deletePlayerAsk(){
   const p = S.players.find(x => x.id === fichaId);
   if (!p) return;
   const ok = await appConfirm('Eliminar jugador',
-    '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + '? Se pierde su ficha completa. Si puede volver, conviene "Exportar ficha" antes.',
+    '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + '? Se pierde su ficha completa (asistencia, evaluaciones y resultados de pruebas incluidos; en los partidos figura como "Jugador borrado"). Si puede volver, conviene "Exportar ficha" antes.',
     { okLabel:'Eliminar', danger:true });
   if (!ok) return;
+  const pid = p.id;
   if (p.fotoId) deletePhoto(p.fotoId);
-  S.players = S.players.filter(x => x.id !== fichaId);
+  S.players = S.players.filter(x => x.id !== pid);
+  // Limpiar sus rastros. Los PARTIDOS quedan tal cual a propósito: sacar un
+  // cambio alteraría los minutos derivados de los demás (se muestra
+  // "Jugador borrado" donde haga falta).
+  S.attendance.forEach(a => {
+    if (a.marks) delete a.marks[pid];
+    if (a.rpe) delete a.rpe[pid];
+  });
+  S.evaluations = S.evaluations.filter(e => e.playerId !== pid);
+  S.testSessions.forEach(s => {
+    if (s.resultados) delete s.resultados[pid];
+    if (s.vueltas) delete s.vueltas[pid];
+  });
+  S.exercises.forEach(e => {
+    if ((e.jugadores || []).includes(pid)) e.jugadores = e.jugadores.filter(x => x !== pid);
+    // la ficha dibujada queda (con su nombre en label), solo se suelta el vínculo
+    ((e.board && e.board.tokens) || []).forEach(t => { if (t.pid === pid) delete t.pid; });
+    (e.hist || []).forEach(h => ((h.board && h.board.tokens) || []).forEach(t => { if (t.pid === pid) delete t.pid; }));
+  });
+  crSel = crSel.filter(x => x !== pid);
   saveData();
   closeOverlay('ovFicha');
   renderPlayers();
@@ -4622,7 +4645,8 @@ function pzOpenUI(title){
 function pzCollect(){
   if (!pz) return;
   pzStorePos();   // las posiciones actuales quedan en el paso seleccionado
-  const num = id => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  // negativos tipeados a mano = error → quedan como "sin dato"
+  const num = id => { const n = Number(document.getElementById(id).value); return (document.getElementById(id).value === '' || isNaN(n) || n < 0) ? null : n; };
   pz.nombre = document.getElementById('pzNombre').value.trim();
   pz.descripcion = document.getElementById('pzDesc').value.trim();
   pz.materiales = document.getElementById('pzMat').value.trim();
@@ -4642,9 +4666,11 @@ function pzSave(){
   const ix = S.exercises.findIndex(x => x.id === pz.id);
   if (ix >= 0){
     const prev = S.exercises[ix];
-    // guarda la pizarra ANTERIOR como versión restaurable (máx 5)
+    // guarda la pizarra ANTERIOR como versión restaurable (máx 5, y con tope
+    // de peso: hist vive en localStorage y una pizarra gigante × 5 suma)
     if (JSON.stringify(prev.board) !== JSON.stringify(pz.board)){
       pz.hist = (prev.hist || []).concat([{ fecha:todayISO(), board:prev.board }]).slice(-5);
+      while (pz.hist.length > 1 && JSON.stringify(pz.hist).length > 300000) pz.hist.shift();
     } else pz.hist = prev.hist || [];
     S.exercises[ix] = pz;
   } else S.exercises.push(pz);
@@ -4664,6 +4690,12 @@ async function pzBack(){
     if (pzJson(pz) !== pzSnap){
       const ok = await appConfirm('Salir sin guardar', 'Hay cambios sin guardar en el ejercicio. ¿Salir igual?', { okLabel:'Salir', danger:true });
       if (!ok) return;
+    }
+    // Ejercicio NUEVO que se descarta: si se le generó y guardó un video en
+    // esta sesión, borrar los blobs (si no quedan huérfanos en IndexedDB).
+    if (!S.exercises.some(x => x.id === pz.id)){
+      (pz.media || []).forEach(m => { deleteMedia(m.videoId); deleteMedia(m.imgId); });
+      pz.media = [];
     }
   }
   closeOverlay('ovBoard');

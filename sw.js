@@ -13,6 +13,12 @@
 
 const CACHE = 'pruevacero-20260713-173559';
 
+// Cache APARTE para las librerías de CDN (Excel/PDF): NO lleva versión, así
+// sobrevive a las actualizaciones de la app y no hace falta internet de
+// nuevo tras cada release. Las URLs del CDN ya van versionadas (xlsx/0.18.5,
+// jspdf/2.5.1), no cambian de contenido.
+const CDN_CACHE = 'pruevacero-cdn-v1';
+
 // Recursos propios (mismo origen) — se precachean al instalar.
 const PRECACHE = [
   './',
@@ -35,7 +41,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== CDN_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -61,14 +67,15 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Resto (estáticos propios + eventuales CDN): cache-first.
+  // Resto: cache-first. Lo de otro origen (CDN) va al cache persistente.
+  const bucket = url.origin === self.location.origin ? CACHE : CDN_CACHE;
   e.respondWith(
     caches.match(req).then(m => {
       if (m) return m;
       return fetch(req).then(r => {
         if (r && (r.ok || r.type === 'opaque')) {
           const cp = r.clone();
-          caches.open(CACHE).then(c => c.put(req, cp)).catch(() => {});
+          caches.open(bucket).then(c => c.put(req, cp)).catch(() => {});
         }
         return r;
       }).catch(() => m);
