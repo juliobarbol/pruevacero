@@ -44,6 +44,11 @@ asistencia a clases, estadísticas y evaluación técnica 1–10 con radar.
   **Fotos y escudos en IndexedDB** (`pruevacero_photos`), en el estado solo
   viaja el id (`fotoId`/`escudoId`); caché síncrona `_photoCache` +
   `hydratePhotoCache()` al arrancar. El backup JSON adjunta las fotos.
+- **Supabase** (proyecto `pruevacero`, cuenta `juliobarribolbo+pruevacero@`):
+  se habla por `fetch` a la API REST, **sin librería** — meter supabase-js
+  sería otra dependencia externa capaz de frenar el arranque. La clave
+  `SB_KEY` es la publishable (pública a propósito); lo que protege los datos
+  es el RLS. NUNCA poner la `service_role` en el repo.
 - Dependencias CDN (cdnjs, con SRI): SheetJS (xlsx 0.18.5) para Excel y
   jsPDF (2.5.1) para el informe PDF. **NO van en el `<head>`**: se cargan bajo
   demanda con `loadCdnLib('xlsx'|'jspdf')` (tabla `CDN_LIBS`) y el SW las deja
@@ -81,6 +86,7 @@ grep -n "===== js/" index.html
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
 | `js/board.js` | pestaña 📋 Pizarra (3 vistas: Ejercicios / Sesiones / 📅 Semana): ejercicios en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota, `label`/`pid` para nombres) y zonas arrastrables por pointer events, chapitas/figuras, ficha del ejercicio; animación por pasos (`board.frames`, `pzTick`/`pzPlay`), video WebM (`pzCanvasDraw` + MediaRecorder), biblioteca `PZ_LIB` (20 precargados), compartir (`exExport`/`importExerciseJson`), semana `renderPzWeek`. ⚠️ rAF casi no corre bajo `--virtual-time-budget`: en tests llamar `pzTick(t)` a mano |
 | `js/sessions.js` | Sesiones de entrenamiento (`S.trainSessions`, vista "🗓 Sesiones" del toggle en Pizarra, funciones `ses*`): bloques cal/ppal/vc con ejercicios de la pizarra o actividades libres, minutos con default en `carga.dur`, total derivado (`sesTotalMin`), duplicar, "sesión de hoy" en Clases |
+| `js/sync.js` | **Sincronización entre dispositivos (Supabase)**: cuenta (mail+contraseña vía REST, sin librería), `syncTrack()` engancha en `saveData()` y anota por huella qué registro cambió (`SY.pend`), `syncNow()` sube pendientes y baja novedades por cursor (`SY.cursor`), fotos a Storage. Tarjeta en Config (`renderSyncCard`). Tabla única `registros` en Supabase (ver `supabase-schema.sql`) |
 | `js/backup.js` | backup JSON completo (incluye fotos) |
 | `js/export.js` | Excel con autofiltro (jugadores / estadísticas / jornada) |
 | `js/stats.js` | agregados (`aggFor`), tabla comparativa, resúmenes de ficha |
@@ -137,6 +143,10 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 - Fechas de calendario SIEMPRE en local (`todayISO`, `fmtFecha`, `dowOf`
   parsean por partes) — nunca `toISOString().slice(0,10)`.
 - Escapar TODO dato de usuario con `esc()` antes de meterlo en `innerHTML`.
+- La sincronización NO puede frenar nada: todas las llamadas con timeout,
+  todo de fondo, y si falla se reintenta. Sin cuenta la app funciona igual.
+- Si se agrega una colección nueva a `S`, sumarla a `SY_COLS` (js/sync.js) o
+  no se sincroniza. Tiene que ser una lista de objetos con `id`.
 - NUNCA agregar un tag de script externo (CDN) al `<head>`: bloquea
   `DOMContentLoaded`, que es donde arranca la app, y sin señal la app no
   abre. Librería nueva → sumarla a `CDN_LIBS` + `loadCdnLib()` y a la lista

@@ -372,6 +372,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 
   <!-- ══════════════ PESTAÑA CONFIG ══════════════ -->
   <section class="tab" id="tab-config">
+    <div class="card" id="syncCard"></div>
     <div class="card">
       <h3>🏟️ Equipos</h3>
       <p class="hint">Creá un equipo por cada grupo al que le des clases. Los
@@ -964,7 +965,10 @@ function safeSetLS(k, v){
   try { localStorage.setItem(k, v); return true; }
   catch(e){ toast('⚠️ No se pudo guardar (memoria llena)', true); return false; }
 }
-function saveData(){ safeSetLS(LS.DATA, JSON.stringify(S)); }
+function saveData(){
+  try { syncTrack(); } catch(e){}      // anota qué cambió (nunca puede romper el guardado)
+  safeSetLS(LS.DATA, JSON.stringify(S));
+}
 function saveUI(){ safeSetLS(LS.UI, JSON.stringify(UI)); }
 
 /* --- helpers --- */
@@ -1546,6 +1550,7 @@ function switchTab(t){
   if (t === 'stats') renderStats();
   if (t === 'clases') renderClases();
   if (t === 'pizarra') renderPizarra();
+  if (t === 'config') renderSyncCard();
   window.scrollTo(0, 0);
 }
 function closeOverlay(id){
@@ -6895,6 +6900,429 @@ window.addEventListener('appinstalled', () => {
 });
 
 /* ═══════════════════════════════════════════════════════════════════
+   ===== js/sync.js ===== Sincronización entre dispositivos (Supabase)
+   ═══════════════════════════════════════════════════════════════════ */
+// REGLA DE ORO: esto NUNCA puede frenar la app. Todo pasa de fondo, con
+// timeout, y si falla se reintenta después. Sin internet la app funciona
+// exactamente igual que antes (localStorage + IndexedDB).
+//
+// Cómo funciona:
+//  - Cada colección de S (teams, players, matches…) es una lista de
+//    registros con id. Cada registro viaja como una fila en Supabase.
+//  - saveData() llama a syncTrack(): compara una huella (hash) de cada
+//    registro contra la anterior y anota SOLO lo que cambió, con la hora
+//    del cambio. Eso queda pendiente hasta que haya señal.
+//  - Al sincronizar: primero se sube lo pendiente, después se baja lo que
+//    cambió en la nube desde la última vez (marcador `cursor`).
+//  - Conflicto = el mismo registro tocado en dos aparatos: gana el que
+//    tiene la hora más nueva (lo decide la base de datos, no la app).
+//  - Las fotos van a Supabase Storage, a una carpeta propia del usuario.
+//    Los videos de la pizarra NO se sincronizan (pesan demasiado), igual
+//    que en la copia de seguridad.
+
+const SB_URL = 'https://fesdzaarhodbwchtowph.supabase.co';
+const SB_KEY = 'sb_publishable_Qa5hKc-nKpNgEZg1BG1rEw_m0Bsjmx_';
+const SY_LS  = 'pc_sync';
+const SY_TIMEOUT = 20000;          // ninguna llamada puede colgarse más que esto
+
+// Colecciones de S que se sincronizan (todas son listas de {id, …}).
+const SY_COLS = ['teams','players','testDefs','testSessions','matches','attendance',
+                 'evaluations','evalAspects','grupos','exercises','trainSessions','folders'];
+
+let SY = syLoad();
+let _syRunning = false, _syTimer = null;
+
+function syLoad(){
+  try {
+    const raw = localStorage.getItem(SY_LS);
+    if (raw){
+      const d = JSON.parse(raw);
+      if (d && typeof d === 'object'){
+        d.hash = d.hash || {};      // huella del último estado conocido por registro
+        d.pend = d.pend || {};      // { 'players:p1': hora del cambio }
+        d.fotos = d.fotos || {};    // fotos ya subidas
+        return d;
+      }
+    }
+  } catch(e){}
+  return { hash:{}, pend:{}, fotos:{}, cursor:null, iniciado:false, token:null,
+           refresh:null, uid:null, email:null, expira:0, ultima:null };
+}
+function sySave(){ safeSetLS(SY_LS, JSON.stringify(SY)); }
+function syLogueado(){ return !!(SY.token && SY.uid); }
+function syPendientes(){ return Object.keys(SY.pend).length; }
+
+// Huella corta y barata de un registro (para detectar cambios sin guardar
+// una copia entera del estado, que duplicaría el espacio usado).
+function syHash(obj){
+  const s = JSON.stringify(obj);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++){
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return s.length + ':' + h.toString(36);
+}
+
+// Se llama en CADA saveData(): anota qué cambió desde la última vez.
+// Si `desdeLaNube` es true, solo actualiza huellas (no marca para subir).
+function syncTrack(desdeLaNube){
+  const ahora = Date.now();
+  const vistos = {};
+  let cambio = false;
+  SY_COLS.forEach(col => {
+    const lista = S[col];
+    if (!Array.isArray(lista)) return;
+    lista.forEach(r => {
+      if (!r || !r.id) return;
+      const k = col + ':' + r.id;
+      vistos[k] = 1;
+      const h = syHash(r);
+      if (SY.hash[k] !== h){
+        SY.hash[k] = h;
+        if (!desdeLaNube){ SY.pend[k] = ahora; }
+        cambio = true;
+      }
+    });
+  });
+  // Lo que estaba y ya no está = borrado (hay que avisarle a la nube).
+  Object.keys(SY.hash).forEach(k => {
+    if (vistos[k]) return;
+    delete SY.hash[k];
+    if (!desdeLaNube){ SY.pend[k] = ahora; }
+    cambio = true;
+  });
+  if (cambio) sySave();
+  if (cambio && !desdeLaNube && syLogueado()) syncPronto();
+}
+
+/* ── Llamadas HTTP (con timeout, nunca se cuelgan) ───────────────── */
+function syFetch(url, opts, ms){
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms || SY_TIMEOUT);
+  return fetch(url, Object.assign({ signal: ctrl.signal }, opts || {}))
+    .finally(() => clearTimeout(t));
+}
+async function syApi(ruta, opts){
+  opts = opts || {};
+  const h = Object.assign({ apikey: SB_KEY }, opts.headers || {});
+  if (SY.token) h.Authorization = 'Bearer ' + SY.token;
+  const r = await syFetch(SB_URL + ruta, Object.assign({}, opts, { headers: h }));
+  return r;
+}
+async function syJson(ruta, opts){
+  const r = await syApi(ruta, opts);
+  let d = null;
+  try { d = await r.json(); } catch(e){}
+  return { ok: r.ok, status: r.status, data: d };
+}
+
+/* ── Cuenta: crear, entrar, salir ────────────────────────────────── */
+async function syncCrearCuenta(email, pass){
+  const r = await syJson('/auth/v1/signup', {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ email: email, password: pass })
+  });
+  if (!r.ok) return { ok:false, msg: syMsgError(r) };
+  // Con confirmación por mail activada no viene sesión hasta confirmar.
+  if (r.data && r.data.access_token){ syGuardarSesion(r.data); return { ok:true, entro:true }; }
+  return { ok:true, entro:false };
+}
+async function syncEntrar(email, pass){
+  const r = await syJson('/auth/v1/token?grant_type=password', {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ email: email, password: pass })
+  });
+  if (!r.ok || !r.data || !r.data.access_token) return { ok:false, msg: syMsgError(r) };
+  syGuardarSesion(r.data);
+  return { ok:true };
+}
+function syGuardarSesion(d){
+  SY.token = d.access_token;
+  SY.refresh = d.refresh_token || null;
+  SY.expira = Date.now() + ((d.expires_in || 3600) * 1000);
+  SY.uid = d.user && d.user.id;
+  SY.email = d.user && d.user.email;
+  sySave();
+}
+function syncSalir(){
+  SY.token = SY.refresh = SY.uid = SY.email = null;
+  SY.expira = 0;
+  // Empezar de cero: si entra con otra cuenta, nada de la anterior sirve.
+  SY.cursor = null; SY.iniciado = false; SY.fotos = {}; SY.hash = {}; SY.pend = {};
+  sySave();
+  renderSyncCard();
+  toast('Sesión cerrada. Tus datos siguen en este dispositivo');
+}
+async function syRenovar(){
+  if (!SY.refresh) return false;
+  const r = await syJson('/auth/v1/token?grant_type=refresh_token', {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ refresh_token: SY.refresh })
+  });
+  if (r.ok && r.data && r.data.access_token){ syGuardarSesion(r.data); return true; }
+  // Refresh vencido de verdad (no un problema de red): hay que volver a entrar.
+  if (r.status === 400 || r.status === 401){
+    SY.token = SY.refresh = null; SY.expira = 0; sySave();
+  }
+  return false;
+}
+async function sySesionViva(){
+  if (!SY.token) return false;
+  if (Date.now() < SY.expira - 60000) return true;
+  return await syRenovar();
+}
+function syMsgError(r){
+  const d = r.data || {};
+  const m = d.msg || d.message || d.error_description || d.error || '';
+  if (/invalid login credentials/i.test(m)) return 'Mail o contraseña incorrectos';
+  if (/email not confirmed/i.test(m))       return 'Falta confirmar el mail: buscá el mail de Supabase y tocá el enlace';
+  if (/already registered/i.test(m))        return 'Ese mail ya tiene cuenta: entrá en vez de crearla';
+  if (/password/i.test(m) && /least/i.test(m)) return 'La contraseña es muy corta (mínimo 6 caracteres)';
+  if (/rate limit|too many/i.test(m))       return 'Demasiados intentos: esperá un rato';
+  return m || ('No se pudo conectar (error ' + r.status + ')');
+}
+
+/* ── Sincronizar ─────────────────────────────────────────────────── */
+function syncPronto(ms){                 // agrupa cambios seguidos en una sola subida
+  clearTimeout(_syTimer);
+  _syTimer = setTimeout(() => syncNow(), ms == null ? 4000 : ms);
+}
+async function syncNow(manual){
+  if (_syRunning){
+    if (manual) toast('Ya se está sincronizando…');
+    else syncPronto(5000);            // reintentar: puede haber cambios nuevos
+    return;
+  }
+  if (!syLogueado()){ if (manual) toast('Primero entrá con tu cuenta', true); return; }
+  if (!navigator.onLine){ if (manual) toast('Sin conexión: se sincroniza cuando vuelva', true); return; }
+  _syRunning = true;
+  renderSyncCard();
+  try {
+    syncTrack();                       // por las dudas: nada se queda sin anotar
+    if (!(await sySesionViva())){
+      if (manual) toast('Se venció la sesión: volvé a entrar', true);
+      return;
+    }
+    // La primera vez en este aparato bajamos ANTES de subir: así lo que ya
+    // esté en la nube no queda pisado por los valores por defecto locales.
+    if (!SY.iniciado){ await syBajar(true); await sySubir(); }
+    else { await sySubir(); await syBajar(); }
+    await syFotos();
+    SY.iniciado = true;
+    SY.ultima = Date.now();
+    sySave();
+    if (manual) toast('Sincronizado ✓');
+  } catch(e){
+    if (manual) toast('No se pudo sincronizar: ' + (e && e.message ? e.message : 'sin conexión'), true);
+  } finally {
+    _syRunning = false;
+    renderSyncCard();
+    if (syPendientes() && navigator.onLine && syLogueado()) syncPronto(6000);
+  }
+}
+
+async function sySubir(){
+  const claves = Object.keys(SY.pend);
+  if (!claves.length) return;
+  const filas = claves.map(k => {
+    const corte = k.indexOf(':');
+    const col = k.slice(0, corte), id = k.slice(corte + 1);
+    const lista = Array.isArray(S[col]) ? S[col] : [];
+    const reg = lista.find(r => r && r.id === id);
+    return {
+      user_id: SY.uid, tabla: col, id: id,
+      data: reg || null, borrado: !reg,
+      client_ts: new Date(SY.pend[k]).toISOString()
+    };
+  });
+  for (let i = 0; i < filas.length; i += 100){
+    const lote = filas.slice(i, i + 100);
+    const r = await syApi('/rest/v1/registros', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(lote)
+    });
+    if (!r.ok) throw new Error('no se pudo subir (error ' + r.status + ')');
+    lote.forEach(f => { delete SY.pend[f.tabla + ':' + f.id]; });
+    sySave();
+  }
+}
+
+async function syBajar(forzar){
+  let cursor = SY.cursor, hubo = false, vueltas = 0;
+  while (vueltas++ < 50){
+    const desde = cursor ? '&updated_at=gt.' + encodeURIComponent(cursor) : '';
+    const r = await syJson('/rest/v1/registros?select=tabla,id,data,borrado,client_ts,updated_at' +
+                           desde + '&order=updated_at.asc&limit=500');
+    if (!r.ok) throw new Error('no se pudo bajar (error ' + r.status + ')');
+    const filas = r.data || [];
+    if (!filas.length) break;
+    filas.forEach(f => { if (syAplicar(f, forzar)) hubo = true; });
+    cursor = filas[filas.length - 1].updated_at;
+    if (filas.length < 500) break;
+  }
+  SY.cursor = cursor;
+  if (hubo){
+    syncTrack(true);        // actualizar huellas SIN marcar para subir
+    saveData();
+    syRefrescarPantalla();
+  }
+  sySave();
+}
+
+// Mete un registro que vino de la nube en el estado local.
+function syAplicar(f, forzar){
+  if (!f || SY_COLS.indexOf(f.tabla) < 0) return false;
+  const k = f.tabla + ':' + f.id;
+  // Si acá hay un cambio pendiente MÁS NUEVO, gana el local (ya se va a subir).
+  // `forzar` = primera sincronización del aparato: manda lo que ya está en la nube.
+  if (!forzar && SY.pend[k] && SY.pend[k] > Date.parse(f.client_ts || 0)) return false;
+  if (!Array.isArray(S[f.tabla])) S[f.tabla] = [];
+  const lista = S[f.tabla];
+  const ix = lista.findIndex(r => r && r.id === f.id);
+  if (f.borrado || !f.data){
+    if (ix < 0) return false;
+    lista.splice(ix, 1);
+    delete SY.pend[k];
+    return true;
+  }
+  const reg = f.data;
+  reg.id = f.id;
+  if (ix < 0) lista.push(reg); else lista[ix] = reg;
+  delete SY.pend[k];
+  return true;
+}
+
+/* ── Fotos (Supabase Storage) ────────────────────────────────────── */
+function syFotosReferenciadas(){
+  const ids = {};
+  (S.players || []).forEach(p => { if (p && p.fotoId) ids[p.fotoId] = 1; });
+  (S.teams || []).forEach(t => { if (t && t.escudoId) ids[t.escudoId] = 1; });
+  return Object.keys(ids);
+}
+async function syFotos(){
+  const ids = syFotosReferenciadas();
+  let bajadas = 0;
+  for (const id of ids){
+    const local = getPhoto(id);
+    if (local && !SY.fotos[id]){                       // está acá y no en la nube → subir
+      const r = await syApi('/storage/v1/object/fotos/' + SY.uid + '/' + id, {
+        method:'POST', headers:{ 'Content-Type':'text/plain', 'x-upsert':'true' }, body: local
+      });
+      if (r.ok || r.status === 409){ SY.fotos[id] = 1; sySave(); }
+    } else if (!local){                                // falta acá → bajarla
+      const r = await syApi('/storage/v1/object/fotos/' + SY.uid + '/' + id);
+      if (r.ok){
+        const txt = await r.text();
+        if (txt && txt.indexOf('data:') === 0){ savePhoto(txt, id); SY.fotos[id] = 1; bajadas++; }
+      }
+    }
+  }
+  if (bajadas){ sySave(); syRefrescarPantalla(); }
+}
+
+/* ── Pantalla ────────────────────────────────────────────────────── */
+function syRefrescarPantalla(){
+  try {
+    renderTeamBar();
+    renderPlayers();
+    // Redibujar la pestaña actual SIN switchTab (que hace scroll al tope).
+    const R = { pruebas:renderPruebas, crono:renderCrono, partidos:renderPartidos,
+                stats:renderStats, clases:renderClases, pizarra:renderPizarra,
+                config:renderSyncCard };
+    if (R[UI.tab]) R[UI.tab]();
+    if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
+  } catch(e){}
+}
+function syEstadoTexto(){
+  if (_syRunning) return 'Sincronizando…';
+  const p = syPendientes();
+  if (!navigator.onLine) return p ? ('Sin conexión · ' + p + ' cambio' + (p > 1 ? 's' : '') + ' por subir') : 'Sin conexión';
+  if (p) return p + ' cambio' + (p > 1 ? 's' : '') + ' por subir';
+  if (SY.ultima) return 'Al día · última vez ' + syHora(SY.ultima);
+  return 'Al día';
+}
+function syHora(ms){
+  const d = new Date(ms), hoy = new Date();
+  const h = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return (d.toDateString() === hoy.toDateString()) ? h : (fmtFecha(todayISOde(d)) + ' ' + h);
+}
+function todayISOde(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function renderSyncCard(){
+  const el = document.getElementById('syncCard');
+  if (!el) return;
+  if (!syLogueado()){
+    el.innerHTML =
+      '<h3>☁️ Usar en varios dispositivos</h3>' +
+      '<p class="hint">Entrá con tu cuenta y tus datos se sincronizan solos entre el ' +
+      'teléfono y la computadora. Sin cuenta la app funciona igual, pero los datos ' +
+      'quedan solo en este aparato.</p>' +
+      '<label>Mail</label><input id="syMail" type="email" autocomplete="username" placeholder="tu@mail.com">' +
+      '<label>Contraseña</label><input id="syPass" type="password" autocomplete="current-password">' +
+      '<div class="btn-row" style="margin-top:12px">' +
+        '<button class="btn" onclick="syncUiEntrar()">Entrar</button>' +
+        '<button class="btn sec" onclick="syncUiCrear()">Crear cuenta</button>' +
+      '</div>' +
+      '<p class="hint" id="syMsg" style="margin-top:10px"></p>';
+    return;
+  }
+  const p = syPendientes();
+  el.innerHTML =
+    '<h3>☁️ Sincronización</h3>' +
+    '<p class="hint">Conectado como <b>' + esc(SY.email || '') + '</b></p>' +
+    '<p class="hint" style="margin-top:6px">Estado: <b>' + esc(syEstadoTexto()) + '</b></p>' +
+    (p ? '<p class="hint" style="margin-top:6px">Los cambios sin subir no se pierden: ' +
+         'quedan guardados acá y se suben solos cuando haya señal.</p>' : '') +
+    '<div class="btn-row" style="margin-top:12px">' +
+      '<button class="btn sec" onclick="syncNow(true)"' + (_syRunning ? ' disabled' : '') + '>🔄 Sincronizar ahora</button>' +
+      '<button class="btn sec" onclick="syncSalir()">Cerrar sesión</button>' +
+    '</div>';
+}
+function syMsgUi(txt, err){
+  const el = document.getElementById('syMsg');
+  if (el){ el.innerHTML = esc(txt); el.style.color = err ? 'var(--danger)' : 'var(--accent)'; }
+}
+function syDatosForm(){
+  const mail = (document.getElementById('syMail').value || '').trim();
+  const pass = document.getElementById('syPass').value || '';
+  if (!mail || !pass){ syMsgUi('Completá mail y contraseña', true); return null; }
+  return { mail: mail, pass: pass };
+}
+async function syncUiEntrar(){
+  const d = syDatosForm(); if (!d) return;
+  syMsgUi('Entrando…');
+  const r = await syncEntrar(d.mail, d.pass);
+  if (!r.ok){ syMsgUi(r.msg, true); return; }
+  renderSyncCard();
+  toast('Listo, ya estás conectado');
+  syncNow(true);
+}
+async function syncUiCrear(){
+  const d = syDatosForm(); if (!d) return;
+  if (d.pass.length < 6){ syMsgUi('La contraseña tiene que tener al menos 6 caracteres', true); return; }
+  syMsgUi('Creando la cuenta…');
+  const r = await syncCrearCuenta(d.mail, d.pass);
+  if (!r.ok){ syMsgUi(r.msg, true); return; }
+  if (r.entro){ renderSyncCard(); toast('Cuenta creada'); syncNow(true); return; }
+  syMsgUi('Cuenta creada. Te mandamos un mail para confirmarla: tocá el enlace y después entrá acá con "Entrar".');
+}
+
+// Arranque: nunca bloquea. Se sincroniza un rato después de abrir, cuando
+// vuelve la señal y al volver a la app.
+function syncBoot(){
+  renderSyncCard();
+  if (!syLogueado()) return;
+  syncPronto(2500);
+  window.addEventListener('online', () => syncPronto(1000));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) syncPronto(1500);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    ===== js/core.js ===== Arranque + PWA
    ═══════════════════════════════════════════════════════════════════ */
 function boot(){
@@ -6917,6 +7345,8 @@ function boot(){
     renderPlayers();
     if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
   }).catch(() => {});   // sin fotos la app igual funciona
+
+  try { syncBoot(); } catch(e){}       // sincronización de fondo (nunca bloquea)
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(() => {});
