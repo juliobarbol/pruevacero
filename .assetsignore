@@ -6,3 +6,4 @@ CLAUDE.md
 build.py
 .github/
 .claude/
+supabase-schema.sql
