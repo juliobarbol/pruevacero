@@ -65,6 +65,9 @@ create policy "solo mis registros" on public.registros
 -- nuevas de forma automática, que es lo correcto).
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.registros to authenticated;
+-- Supabase deja igual unos permisos residuales para el rol anónimo (TRUNCATE,
+-- REFERENCES, TRIGGER). No hacen falta para nada: se los sacamos.
+revoke all on public.registros from anon;
 
 -- ── Fotos y escudos (Supabase Storage) ──────────────────────────────
 insert into storage.buckets (id, name, public)
