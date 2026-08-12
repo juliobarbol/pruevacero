@@ -53,9 +53,11 @@ automáticos.
 
 - **PWA de un solo archivo**: todo en `index.html` (HTML + CSS + JS vanilla,
   sin frameworks ni build). Igual que StockMerger y Presupuestos AR.
-- **Offline-first**: `sw.js` (HTML network-first, resto cache-first, con
-  versión de cache que se sube en cada release) + `manifest.webmanifest`
-  para instalarla en el teléfono.
+- **Offline-first**: `sw.js` (HTML network-first **con timeout de 3 s** —
+  con señal mala se abre desde el cache en vez de colgarse —, resto
+  cache-first, con versión de cache que se sube en cada release) +
+  `manifest.webmanifest` para instalarla en el teléfono. Las librerías de
+  CDN se cargan bajo demanda: nada externo bloquea el arranque.
 - **Datos locales**: `localStorage` para el estado (objeto global `S` con
   claves centralizadas), respaldado por IndexedDB si crece (fotos, historial
   largo). Sin login ni backend en la etapa inicial.
@@ -249,6 +251,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 28 | **Pizarra — 4 equipos**: además de 🔴 rojo y 🔵 azul, fichas 🟠 naranja y ⚪ blanco (número/borde oscuros para leerse sobre el pasto); "Ponerlos en la cancha" con los 4 colores (naranjas arriba, blancos abajo) | HECHA (2026-07-13) |
 | 29 | **Cancha reglamentaria**: medias lunas del área (arco r 9,15 desde el punto penal), ángulos de córner y los dos arcos (7,32 de boca) en el SVG y en el canvas (video/PDF/biblioteca) | HECHA (2026-07-13) |
 | 30 | **Guías 2.0 + etiquetas + carriles pintados** (pedidos 2026-07-13): `board.guide` pasa a objeto `{tipo, cols, rows, nums}` (compat con string viejo, `pzGuideNorm`); overlay ▦ `ovGuide`: cuadrícula PERSONALIZABLE (2-12 × 2-16) con 🔢 numeración de zonas (también numera los 5 carriles); 🖌 "Pintar carril" crea una zona rectangular exacta sobre cualquiera de los 5 carriles (laterales/internos/central) para marcar por dónde atacar; 🏷 en zonas = etiqueta estratégica centrada (Zona de creación/ataque/defensa/entrada, texto libre); arreglado de paso: el canvas ahora respeta la rotación de zonas | HECHA (2026-07-13) |
+| 31 | **Fix offline (reporte de un usuario 2026-08-11)**: la app no abría en canchas sin señal. Causas: los tags CDN de SheetJS/jsPDF con `defer` en el `<head>` bloqueaban `DOMContentLoaded` (donde arranca todo) y la navegación esperaba a la red sin timeout. Ahora: librerías bajo demanda (`loadCdnLib`) + precacheadas, SW con timeout de 3 s → cache, install que falla si no puede guardar el HTML y activate que no borra el cache viejo hasta tener el nuevo | HECHA (2026-08-12) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 

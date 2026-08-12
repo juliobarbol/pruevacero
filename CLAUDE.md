@@ -32,7 +32,10 @@ asistencia a clases, estadísticas y evaluación técnica 1–10 con radar.
   sin frameworks ni build). JS en ámbito global con `onclick="..."` — **NO
   convertir a módulos ES**.
 - `sw.js` + `manifest.webmanifest` + íconos → instalable y offline-first.
-  El HTML se sirve network-first (las actualizaciones llegan solas).
+  El HTML se sirve network-first **con timeout de 3 s** (con señal mala abre
+  desde el cache; las actualizaciones igual llegan solas). **Regla de oro:
+  NADA externo puede bloquear el arranque** — la app se usa en canchas sin
+  señal.
 - **La versión del cache la estampa `build.py`** vía el workflow
   `.github/workflows/stamp-sw.yml` en cada push a `main` (commit
   "[skip stamp]"). No hace falta bump manual; verificar tras publicar que
@@ -42,8 +45,9 @@ asistencia a clases, estadísticas y evaluación técnica 1–10 con radar.
   viaja el id (`fotoId`/`escudoId`); caché síncrona `_photoCache` +
   `hydratePhotoCache()` al arrancar. El backup JSON adjunta las fotos.
 - Dependencias CDN (cdnjs, con SRI): SheetJS (xlsx 0.18.5) para Excel y
-  jsPDF (2.5.1) para el informe PDF del jugador. Ambas necesitan internet la
-  PRIMERA vez; después el SW las cachea.
+  jsPDF (2.5.1) para el informe PDF. **NO van en el `<head>`**: se cargan bajo
+  demanda con `loadCdnLib('xlsx'|'jspdf')` (tabla `CDN_LIBS`) y el SW las deja
+  precacheadas en `CDN_CACHE`, así los exportes también andan sin internet.
 
 ## Trabajar sin quemar tokens
 
@@ -57,7 +61,7 @@ grep -n "===== js/" index.html
 
 | Región / módulo | Rol |
 |---|---|
-| `<head>` (1–19) | CDN xlsx + script de tema temprano |
+| `<head>` | manifest/íconos + script de tema temprano (sin librerías externas) |
 | `<style>` (20–266) | CSS (variables `:root` + `html[data-theme="light"]`) |
 | HTML (268–575) | pestañas, overlays, nav inferior, inputs file ocultos |
 | `js/state.js` | `S` (datos) + `UI`, `LS`, defaults (`DEF_TESTDEFS`, `DEF_ASPECTS`, `LINEAS/ROLES`), helpers (`esc`, `todayISO`, `fmtFecha`, `edad`, `catOf`, `toast`, `download`) |
@@ -80,7 +84,7 @@ grep -n "===== js/" index.html
 | `js/backup.js` | backup JSON completo (incluye fotos) |
 | `js/export.js` | Excel con autofiltro (jugadores / estadísticas / jornada) |
 | `js/stats.js` | agregados (`aggFor`), tabla comparativa, resúmenes de ficha |
-| `js/core.js` | arranque + registro del SW + hidratación de fotos |
+| `js/core.js` | `boot()` (arranca por `DOMContentLoaded` o directo si el DOM ya está listo) + registro del SW + hidratación de fotos |
 
 El modelo de datos completo está en `PLAN.md` (sección "Modelo de datos").
 
@@ -133,6 +137,10 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 - Fechas de calendario SIEMPRE en local (`todayISO`, `fmtFecha`, `dowOf`
   parsean por partes) — nunca `toISOString().slice(0,10)`.
 - Escapar TODO dato de usuario con `esc()` antes de meterlo en `innerHTML`.
+- NUNCA agregar un tag de script externo (CDN) al `<head>`: bloquea
+  `DOMContentLoaded`, que es donde arranca la app, y sin señal la app no
+  abre. Librería nueva → sumarla a `CDN_LIBS` + `loadCdnLib()` y a la lista
+  `CDN_LIBS` del `sw.js`.
 - TODO lo que entra por importación de archivos (ficha, ejercicio, backup)
   pasa por `sanitizePlayer` / `sanitizeExercise` / `sanitizeState`
   (js/state.js): ids con whitelist, números coercionados. Si se agrega un
