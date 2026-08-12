@@ -12,8 +12,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PruevaCero">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw" crossorigin="anonymous"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<!-- Las librerías de CDN (Excel/PDF) NO se cargan acá: un tag externo con
+     defer bloquea DOMContentLoaded, que es donde arranca la app, y sin señal
+     queda colgado → la app no abría en canchas sin datos. Se cargan bajo
+     demanda con loadCdnLib() y van precacheadas por el service worker. -->
 <script>
 // Tema antes del primer pintado (evita flash)
 (function(){
@@ -5998,13 +6000,54 @@ function exportBackup(){
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/export.js ===== Exportes a Excel (SheetJS, con autofiltro)
    ═══════════════════════════════════════════════════════════════════ */
-function _xlsxOk(){
-  if (typeof XLSX === 'undefined'){
-    toast('La librería de Excel no cargó todavía: probá con internet y reintentá', true);
-    return false;
-  }
-  return true;
+// ── Librerías de CDN bajo demanda ──────────────────────────────────
+// Regla: NADA externo puede bloquear el arranque (la app se usa en canchas
+// sin señal). Se piden recién cuando el usuario exporta; el SW las tiene
+// precacheadas en un cache aparte, así offline también andan.
+const CDN_LIBS = {
+  xlsx: { nombre:'Excel',
+          url:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+          sri:'sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw',
+          ready: () => typeof XLSX !== 'undefined' },
+  jspdf:{ nombre:'PDF',
+          url:'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+          sri:'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk',
+          ready: () => !!(window.jspdf && window.jspdf.jsPDF) }
+};
+const _cdnLoads = {};
+function loadCdnLib(key){
+  const lib = CDN_LIBS[key];
+  if (lib.ready()) return Promise.resolve(true);
+  if (_cdnLoads[key]) return _cdnLoads[key];
+  _cdnLoads[key] = new Promise(resolve => {
+    const s = document.createElement('script');
+    let done = false;
+    const finish = () => {                    // con timeout: si la señal es
+      if (done) return;                       // mala no dejamos el botón
+      done = true;                            // colgado para siempre
+      const ok = lib.ready();
+      if (!ok){ delete _cdnLoads[key]; s.remove(); }   // permitir reintentar
+      resolve(ok);
+    };
+    const t = setTimeout(finish, 12000);
+    s.src = lib.url;
+    if (lib.sri) s.integrity = lib.sri;
+    s.crossOrigin = 'anonymous';
+    s.onload  = () => { clearTimeout(t); finish(); };
+    s.onerror = () => { clearTimeout(t); finish(); };
+    document.head.appendChild(s);
+  });
+  return _cdnLoads[key];
 }
+async function _cdnOk(key){
+  const lib = CDN_LIBS[key];
+  if (lib.ready()) return true;
+  toast('Preparando ' + lib.nombre + '…');
+  const ok = await loadCdnLib(key);
+  if (!ok) toast('El ' + lib.nombre + ' necesita internet la primera vez', true);
+  return ok;
+}
+async function _xlsxOk(){ return _cdnOk('xlsx'); }
 function _saveXlsx(aoa, sheetName, fileName){
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };   // autofiltro en la cabecera
@@ -6036,11 +6079,11 @@ function aoaJugadores(t){
     });
   return [head].concat(rows);
 }
-function exportPlayersXlsx(){
+async function exportPlayersXlsx(){
   const t = activeTeam();
   if (!t){ toast('Primero creá un equipo', true); return; }
   if (!teamPlayers(t.id).length){ toast('El equipo no tiene jugadores', true); return; }
-  if (!_xlsxOk()) return;
+  if (!(await _xlsxOk())) return;
   _saveXlsx(aoaJugadores(t), 'Jugadores', 'jugadores-' + _slug(t.nombre) + '-' + todayISO() + '.xlsx');
   toast('Excel de jugadores descargado');
 }
@@ -6057,11 +6100,11 @@ function aoaStats(t){
     });
   return [head].concat(rows);
 }
-function exportStatsXlsx(){
+async function exportStatsXlsx(){
   const t = activeTeam();
   if (!t){ toast('Primero creá un equipo', true); return; }
   if (!S.matches.some(m => m.teamId === t.id)){ toast('No hay partidos cargados en este equipo', true); return; }
-  if (!_xlsxOk()) return;
+  if (!(await _xlsxOk())) return;
   _saveXlsx(aoaStats(t), 'Estadísticas', 'estadisticas-' + _slug(t.nombre) + '-' + todayISO() + '.xlsx');
   toast('Excel de estadísticas descargado');
 }
@@ -6077,11 +6120,11 @@ function aoaSession(s){
   });
   return [head].concat(rows);
 }
-function exportSessionXlsx(){
+async function exportSessionXlsx(){
   const s = curSession();
   if (!s) return;
   if (!(s.pruebas || []).length){ toast('La jornada no tiene pruebas elegidas', true); return; }
-  if (!_xlsxOk()) return;
+  if (!(await _xlsxOk())) return;
   const t = S.teams.find(x => x.id === s.teamId);
   _saveXlsx(aoaSession(s), 'Pruebas', 'pruebas-' + s.fecha + '-' + _slug(t ? t.nombre : '') + '.xlsx');
   toast('Excel de la jornada descargado');
@@ -6090,8 +6133,8 @@ function exportSessionXlsx(){
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/pdf.js ===== Informe PDF del jugador (jsPDF, Etapa 10)
    ═══════════════════════════════════════════════════════════════════ */
-// Igual que el Excel: jsPDF viene por CDN y necesita internet la PRIMERA
-// vez; después queda cacheado por el SW. Sin emojis en el PDF (helvetica).
+// Igual que el Excel: jsPDF se carga bajo demanda (loadCdnLib) y el SW lo
+// deja precacheado, así el informe también sale sin internet. Sin emojis en el PDF (helvetica).
 // El informe se arma para "escanear con el ojo": números grandes en tiles,
 // barras por aspecto, tabla de pruebas con tendencia y color en las señales.
 let _pdfDoc = null, _pdfY = 0;
@@ -6102,13 +6145,7 @@ const PC_INK = [15, 23, 42], PC_MUT = [100, 116, 139], PC_ACC = [22, 163, 74];
 const PC_BOR = [226, 232, 240], PC_SOFT = [248, 250, 252], PC_BLUE = [2, 132, 199];
 const PC_RED = [220, 38, 38], PC_AMBER = [217, 119, 6], PC_WHITE = [255, 255, 255];
 
-function _pdfOk(){
-  if (!(window.jspdf && window.jspdf.jsPDF)){
-    toast('La librería de PDF no cargó todavía: probá con internet y reintentá', true);
-    return false;
-  }
-  return true;
-}
+async function _pdfOk(){ return _cdnOk('jspdf'); }
 function _pf(c){ _pdfDoc.setFillColor(c[0], c[1], c[2]); }
 function _ps(c){ _pdfDoc.setDrawColor(c[0], c[1], c[2]); }
 function _pt(f, s, c){ _pdfDoc.setFont('helvetica', f); _pdfDoc.setFontSize(s); _pdfDoc.setTextColor(c[0], c[1], c[2]); }
@@ -6183,10 +6220,10 @@ function _pdfTri(cx, cy, up, c){
   else _pdfDoc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
 }
 
-function exportPlayerPdf(){
+async function exportPlayerPdf(){
   const p = S.players.find(x => x.id === fichaId);
   if (!p) return;
-  if (!_pdfOk()) return;
+  if (!(await _pdfOk())) return;
   const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
   _pdfDoc = doc; _pdfY = 16;
   const t = S.teams.find(x => x.id === p.teamId);
@@ -6558,8 +6595,8 @@ function _pdfExerciseBody(e, t){
     _pdfPara(parts.join(' · '), 10, PC_INK);
   }
 }
-function exportExercisePdf(e){
-  if (!e || !_pdfOk()) return;
+async function exportExercisePdf(e){
+  if (!e || !(await _pdfOk())) return;
   const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
   _pdfDoc = doc; _pdfY = 16;
   const t = S.teams.find(x => x.id === e.teamId);
@@ -6581,8 +6618,8 @@ function pzPdf(){
   pzCollect();
   exportExercisePdf(pz);
 }
-function exportSesionPdf(s){
-  if (!s || !_pdfOk()) return;
+async function exportSesionPdf(s){
+  if (!s || !(await _pdfOk())) return;
   const doc = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
   _pdfDoc = doc; _pdfY = 16;
   const t = S.teams.find(x => x.id === s.teamId);
@@ -6860,7 +6897,7 @@ window.addEventListener('appinstalled', () => {
 /* ═══════════════════════════════════════════════════════════════════
    ===== js/core.js ===== Arranque + PWA
    ═══════════════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
+function boot(){
   // Equipo activo válido
   if (UI.teamId && !S.teams.some(t => t.id === UI.teamId)) UI.teamId = null;
   if (!UI.teamId && S.teams.length) UI.teamId = S.teams[0].id;
@@ -6879,12 +6916,17 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTeamBar();
     renderPlayers();
     if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
-  });
+  }).catch(() => {});   // sin fotos la app igual funciona
 
   if ('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
-});
+}
+
+// Arrancar sí o sí: si el DOM ya estaba listo (por ejemplo si algo demoró y
+// DOMContentLoaded pasó antes), llamamos derecho.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
 </script>
 </body>
 </html>
