@@ -72,9 +72,9 @@ grep -n "===== js/" index.html
 | `js/state.js` | `S` (datos) + `UI`, `LS`, defaults (`DEF_TESTDEFS`, `DEF_ASPECTS`, `LINEAS/ROLES`), helpers (`esc`, `todayISO`, `fmtFecha`, `edad`, `catOf`, `toast`, `download`) |
 | `js/modal.js` | `appConfirm` / `appPromptText` (nada de `prompt()`/`confirm()` nativos) |
 | `js/photos.js` | IndexedDB de fotos, `savePhoto/getPhoto/deletePhoto`, `pickImage` (achica con canvas), `avatarHtml`, `teamLogoHtml` |
-| `js/ui.js` | tema, `switchTab` (acá se enganchan los render por pestaña), overlays |
+| `js/ui.js` | tema, **modo solo asistencia** (`UI.modo='asis'`, `applyMode`, `setAppMode`, tarjeta `renderModoCard`; CSS `.full-only`/`.asis-only` sobre `body.modo-asis`), `switchTab` (acá se enganchan los render por pestaña; en modo asis redirige a `clases` todo lo que no esté en `ASIS_TABS`), overlays |
 | `js/teams.js` | equipos: alta/renombrar/borrar, selector, escudo |
-| `js/cats.js` | categorías por rango de años (`playerCat`, `catLabelFor`) + días/hora de clase |
+| `js/cats.js` | categorías por rango de años (`playerCat` — respeta el override `p.catId` —, `catLabelFor`) + días/hora de clase; selector de categoría compartido (`fillCatSelect`, `setPlayerCatChoice`, `catSelPicked` con "➕ Nueva categoría…") |
 | `js/players.js` | lista con filtros, ficha (`openFicha` arma TODAS las tarjetas), form, mover/exportar/importar jugador |
 | `js/goals.js` | lesiones (`p.lesiones`) y objetivos (`p.objetivos`) en la ficha: `renderLesionesCard`/`renderObjetivosCard`, alta/borrar/cumplir |
 | `js/pdf.js` | informes PDF (jsPDF): jugador (`exportPlayerPdf`), ejercicio (`exportExercisePdf`, cancha rasterizada con `pzBoardPng`, secuencia de pasos) y sesión (`exportSesionPdf`, bloques con miniaturas). Sin emojis dentro del PDF |
@@ -82,7 +82,7 @@ grep -n "===== js/" index.html
 | `js/crono.js` | pestaña ⏱ Crono: cronómetro grupal (tanda en `UI.crono`, tiempo SIEMPRE por hora real `Date.now`−`startAt`, vueltas, meta, orden de llegada, Wake Lock, beeps); al guardar escribe la jornada de HOY (`resultados` + `vueltas`) |
 | `js/groups.js` | Grupos de rendimiento (botón en Pruebas, overlay `ovGrupos`): 3 grupos DERIVADOS de la última marca, modo auto (tercios) o umbral (cortes en `testDef.grupos`); colores/nombres en `S.grupos`; benchmarking por posición, subió/bajó, armar equipos parejos |
 | `js/matches.js` | partidos: titulares, cambios, `minutosDe` (minutos DERIVADOS), planilla con steppers |
-| `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia; **RPE** por presente + duración de la clase (`a.rpe`/`a.durMin`), carga = RPE×min (`cargaDe`) y tarjeta de carga semanal con ⚠ si supera 150% del promedio de 4 semanas |
+| `js/attendance.js` | pestaña Clases: pasar lista (P/A/L), retroactivo, % asistencia; **RPE** por presente + duración de la clase (`a.rpe`/`a.durMin`), carga = RPE×min (`cargaDe`) y tarjeta de carga semanal con ⚠ si supera 150% del promedio de 4 semanas; pestaña **👥 Alumnos** (`renderAlumnos` arma form + `renderAlumnosList` solo la lista, `alumnoAdd`, `ovAlumno` con `openAlumno`/`alumnoSave`/`alumnoDelete`, `blankPlayer`) |
 | `js/evals.js` | evaluación 1–10, aspectos configurables, `drawRadar` (canvas propio), `catAvgScores` |
 | `js/board.js` | pestaña 📋 Pizarra (3 vistas: Ejercicios / Sesiones / 📅 Semana): ejercicios en `S.exercises` (funciones `pz*`/`ex*`); cancha SVG 68×105 con tokens (2 equipos + pelota, `label`/`pid` para nombres) y zonas arrastrables por pointer events, chapitas/figuras, ficha del ejercicio; animación por pasos (`board.frames`, `pzTick`/`pzPlay`), video WebM (`pzCanvasDraw` + MediaRecorder), biblioteca `PZ_LIB` (20 precargados), compartir (`exExport`/`importExerciseJson`), semana `renderPzWeek`. ⚠️ rAF casi no corre bajo `--virtual-time-budget`: en tests llamar `pzTick(t)` a mano |
 | `js/sessions.js` | Sesiones de entrenamiento (`S.trainSessions`, vista "🗓 Sesiones" del toggle en Pizarra, funciones `ses*`): bloques cal/ppal/vc con ejercicios de la pizarra o actividades libres, minutos con default en `carga.dur`, total derivado (`sesTotalMin`), duplicar, "sesión de hoy" en Clases |

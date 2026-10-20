@@ -235,6 +235,13 @@ html[data-theme="light"] .btn{color:#fff}
 .att-pct.mid{color:var(--warn)}
 .att-pct.low{color:var(--danger)}
 
+/* ============================ MODO SOLO ASISTENCIA ============================ */
+/* body.modo-asis oculta todo lo que no es pasar lista / alumnos (UI.modo) */
+body.modo-asis .full-only{display:none !important}
+body:not(.modo-asis) .asis-only{display:none !important}
+.qa-card{border-color:var(--accent)}
+.link-box{font-size:12.5px;word-break:break-all;background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:9px 11px;margin-top:10px;user-select:all}
+
 /* ============================ ESTADÍSTICAS ============================ */
 .sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:12px}
 .sum-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 8px;text-align:center}
@@ -326,7 +333,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 <body>
 
 <header>
-  <div class="brand">⚽</div>
+  <div class="brand" id="brandIc">⚽</div>
   <button class="team-pill" onclick="openTeamOverlay()">
     <span id="teamPillLogo" style="display:contents"></span>
     <span id="teamPillName">Sin equipo</span><span class="caret">▼</span>
@@ -360,6 +367,11 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <div id="clasesContent"></div>
   </section>
 
+  <!-- ══════════════ PESTAÑA ALUMNOS (lista rápida para asistencia) ══════════════ -->
+  <section class="tab" id="tab-alumnos">
+    <div id="alumnosContent"></div>
+  </section>
+
   <!-- ══════════════ PESTAÑA ESTADÍSTICAS ══════════════ -->
   <section class="tab" id="tab-stats">
     <div id="statsContent"></div>
@@ -372,6 +384,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 
   <!-- ══════════════ PESTAÑA CONFIG ══════════════ -->
   <section class="tab" id="tab-config">
+    <div class="card" id="modoCard"></div>
     <div class="card" id="syncCard"></div>
     <div class="card">
       <h3>🏟️ Equipos</h3>
@@ -382,10 +395,10 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <div class="card">
       <h3>📤 Exportar a Excel</h3>
       <p class="hint">Descarga planillas de Excel (con filtros en la cabecera)
-      del equipo activo. Las jornadas de prueba se exportan desde cada jornada.</p>
+      del equipo activo.<span class="full-only"> Las jornadas de prueba se exportan desde cada jornada.</span></p>
       <div class="btn-row">
         <button class="btn sec" onclick="exportPlayersXlsx()">👤 Jugadores</button>
-        <button class="btn sec" onclick="exportStatsXlsx()">📊 Estadísticas</button>
+        <button class="btn sec full-only" onclick="exportStatsXlsx()">📊 Estadísticas</button>
       </div>
     </div>
     <div class="card">
@@ -398,7 +411,7 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
         <button class="btn sec" onclick="document.getElementById('fileBackup').click()">⬆️ Importar</button>
       </div>
     </div>
-    <div class="card">
+    <div class="card full-only">
       <h3>👤 Importar jugador</h3>
       <p class="hint">Trae la ficha de un jugador exportada desde otra instalación
       de PruevaCero y la agrega al equipo activo.</p>
@@ -428,13 +441,14 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
 <button class="fab" id="fabAdd" onclick="openPlayerForm()" style="display:none">＋</button>
 
 <nav>
-  <button class="active" id="nav-jugadores" onclick="switchTab('jugadores')"><span class="ic">👤</span>Jugadores</button>
-  <button id="nav-pruebas" onclick="switchTab('pruebas')"><span class="ic">💪</span>Pruebas</button>
-  <button id="nav-crono" onclick="switchTab('crono')"><span class="ic">⏱️</span>Crono</button>
-  <button id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
-  <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Clases</button>
-  <button id="nav-pizarra" onclick="switchTab('pizarra')"><span class="ic">📋</span>Pizarra</button>
-  <button id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
+  <button id="nav-clases" onclick="switchTab('clases')"><span class="ic">🗓️</span>Asistencia</button>
+  <button class="asis-only" id="nav-alumnos" onclick="switchTab('alumnos')"><span class="ic">👥</span>Alumnos</button>
+  <button class="active full-only" id="nav-jugadores" onclick="switchTab('jugadores')"><span class="ic">👤</span>Jugadores</button>
+  <button class="full-only" id="nav-pruebas" onclick="switchTab('pruebas')"><span class="ic">💪</span>Pruebas</button>
+  <button class="full-only" id="nav-crono" onclick="switchTab('crono')"><span class="ic">⏱️</span>Crono</button>
+  <button class="full-only" id="nav-partidos" onclick="switchTab('partidos')"><span class="ic">⚽</span>Partidos</button>
+  <button class="full-only" id="nav-pizarra" onclick="switchTab('pizarra')"><span class="ic">📋</span>Pizarra</button>
+  <button class="full-only" id="nav-stats" onclick="switchTab('stats')"><span class="ic">📊</span>Stats</button>
 </nav>
 
 <!-- ══════════════ OVERLAY EQUIPOS ══════════════ -->
@@ -458,7 +472,9 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
   <div class="form-grid">
     <div><label>Nombre *</label><input id="pfNombre" autocomplete="off"></div>
     <div><label>Apellido</label><input id="pfApellido" autocomplete="off"></div>
-    <div class="full"><label>Fecha de nacimiento</label><input id="pfNac" type="date"></div>
+    <div class="full"><label>Fecha de nacimiento</label><input id="pfNac" type="date" onchange="pfNacChange()">
+      <p class="hint" id="pfNacHint" style="display:none;margin-top:5px"></p></div>
+    <div class="full"><label>Categoría</label><select id="pfCat" onchange="catSelPicked(this, 'pfNac')"></select></div>
     <div class="full"><label>En el club desde (temporada)</label><input id="pfDesde" autocomplete="off" placeholder="Ej: 2024 o 2024/25"></div>
     <div><label>Pie hábil</label>
       <select id="pfPie"><option value="">—</option><option value="derecho">Derecho</option><option value="izquierdo">Izquierdo</option><option value="ambos">Ambos</option></select></div>
@@ -651,6 +667,25 @@ table.bench{border-collapse:collapse;width:100%;font-size:12.5px}
     <button class="icon-btn" onclick="asisDelete()" title="Borrar esta lista">🗑</button>
   </div>
   <div id="asisBody"></div>
+</div>
+
+<!-- ══════════════ OVERLAY ALUMNO (edición rápida) ══════════════ -->
+<div class="overlay" id="ovAlumno">
+  <div class="ov-head">
+    <button class="icon-btn" onclick="closeOverlay('ovAlumno')">←</button>
+    <h2>Alumno</h2>
+  </div>
+  <div class="form-grid">
+    <div><label>Nombre *</label><input id="aeNombre" autocomplete="off"></div>
+    <div><label>Apellido</label><input id="aeApellido" autocomplete="off"></div>
+    <div class="full"><label>Año de nacimiento</label><input id="aeAnio" type="number" inputmode="numeric" min="1940" max="2100" placeholder="Ej: 2012" oninput="catSelYear('aeCat', 'aeAnio')"></div>
+    <div class="full"><label>Categoría</label><select id="aeCat" onchange="catSelPicked(this, 'aeAnio')"></select></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn sec" onclick="closeOverlay('ovAlumno')">Cancelar</button>
+    <button class="btn" onclick="alumnoSave()">Guardar</button>
+  </div>
+  <div id="aeExtra" style="margin-top:14px"></div>
 </div>
 
 <!-- ══════════════ OVERLAY EVALUACIÓN TÉCNICA ══════════════ -->
@@ -1063,6 +1098,7 @@ function sanitizePlayer(p){
   p.apellido = strOr(p.apellido);
   p.nacimiento = strOr(p.nacimiento);
   p.desdeTemporada = strOr(p.desdeTemporada);
+  p.catId = p.catId ? safeId(p.catId) : null;   // categoría fijada a mano (opcional)
   p.notas = strOr(p.notas);
   p.creado = strOr(p.creado);
   p.fotoId = p.fotoId ? safeId(p.fotoId) : null;
@@ -1535,13 +1571,60 @@ function toggleTheme(){
   const cur = document.documentElement.getAttribute('data-theme') || 'dark';
   applyTheme(cur === 'dark' ? 'light' : 'dark');
 }
+/* --- modo de la app: completa o "solo asistencia" (UI.modo = 'asis') ---
+   El modo solo asistencia muestra únicamente Asistencia + Alumnos (+ ⚙️),
+   para quien por ahora solo pasa lista. Los datos son los mismos (S): al
+   volver a la app completa está todo. Se activa desde Config o con el link
+   ?modo=asistencia (ver boot). */
+const ASIS_TABS = ['clases', 'alumnos', 'config'];
+function isAsisMode(){ return UI.modo === 'asis'; }
+function applyMode(){
+  const asis = isAsisMode();
+  document.body.classList.toggle('modo-asis', asis);
+  document.getElementById('brandIc').textContent = asis ? '🗓️' : '⚽';
+  document.title = asis ? 'PruevaCero · Asistencia' : 'PruevaCero';
+  renderModoCard();
+}
+function setAppMode(m){
+  UI.modo = (m === 'asis') ? 'asis' : '';
+  saveUI();
+  applyMode();
+  switchTab('clases');
+  toast(isAsisMode() ? 'Modo solo asistencia' : 'App completa');
+}
+// Link directo para pasarle a quien solo usa asistencia
+function asisLink(){ return location.origin + location.pathname + '?modo=asistencia'; }
+function copyAsisLink(){
+  const l = asisLink();
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(l).then(() => toast('Link copiado'), () => toast('No se pudo copiar: mantené apretado el link', true));
+  } else toast('Mantené apretado el link para copiarlo', true);
+}
+function renderModoCard(){
+  const box = document.getElementById('modoCard');
+  if (!box) return;
+  box.innerHTML = isAsisMode()
+    ? '<h3>🧭 Modo solo asistencia</h3>' +
+      '<p class="hint">Estás usando la app simplificada: pasar lista y lista de alumnos. ' +
+      'La app completa (pruebas, partidos, estadísticas, pizarra…) usa los mismos alumnos y listas.</p>' +
+      '<div class="btn-row"><button class="btn sec" onclick="setAppMode(\'\')">🧩 Abrir la app completa</button></div>'
+    : '<h3>🧭 Modo solo asistencia</h3>' +
+      '<p class="hint">Deja la app simplificada, solo con pasar lista y la lista de alumnos ' +
+      '(se vuelve a la app completa desde ⚙️). También se activa abriendo este link en el teléfono de quien la va a usar:</p>' +
+      '<div class="link-box">' + esc(asisLink()) + '</div>' +
+      '<div class="btn-row"><button class="btn sec" onclick="copyAsisLink()">🔗 Copiar link</button>' +
+      '<button class="btn sec" onclick="setAppMode(\'asis\')">🗓️ Usar solo asistencia</button></div>';
+}
+
 function switchTab(t){
+  if (isAsisMode() && !ASIS_TABS.includes(t)) t = 'clases';
   UI.tab = t; saveUI();
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(el => el.classList.remove('active'));
   const sec = document.getElementById('tab-' + t);
   if (sec) sec.classList.add('active');
-  const nb = document.getElementById('nav-' + t);
+  // En la app completa "Alumnos" no tiene botón propio: se ilumina Asistencia
+  const nb = document.getElementById('nav-' + ((t === 'alumnos' && !isAsisMode()) ? 'clases' : t));
   if (nb) nb.classList.add('active');
   document.getElementById('fabAdd').style.display = (t === 'jugadores' && activeTeam()) ? 'flex' : 'none';
   if (t === 'pruebas') renderPruebas();
@@ -1549,6 +1632,7 @@ function switchTab(t){
   if (t === 'partidos') renderPartidos();
   if (t === 'stats') renderStats();
   if (t === 'clases') renderClases();
+  if (t === 'alumnos') renderAlumnos();
   if (t === 'pizarra') renderPizarra();
   if (t === 'config') renderSyncCard();
   window.scrollTo(0, 0);
@@ -1621,12 +1705,12 @@ async function teamCreate(){
   S.teams.push(t);
   UI.teamId = t.id;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderAlumnos(); renderPizarra();
   toast('Equipo "' + name + '" creado');
 }
 function teamPick(id){
   UI.teamId = id; saveUI();
-  renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra(); renderTeams();
+  renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderAlumnos(); renderPizarra(); renderTeams();
   closeOverlay('ovTeams');
   closeOverlay('ovFicha');   // si quedó abierta, muestra un jugador del equipo anterior
   fichaId = null;
@@ -1671,7 +1755,7 @@ async function teamDelete(id){
   S.teams = S.teams.filter(x => x.id !== id);
   if (UI.teamId === id) UI.teamId = S.teams.length ? S.teams[0].id : null;
   saveData(); saveUI();
-  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
+  renderTeams(); renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderAlumnos(); renderPizarra();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1682,9 +1766,61 @@ let catFormId = null;    // categoría en edición
 
 function teamCats(t){ return (t && t.categorias) || []; }
 function catForYear(t, y){ return teamCats(t).find(c => y >= c.desde && y <= c.hasta) || null; }
+// p.catId (opcional) fija la categoría a mano; si no, sale del año.
 function playerCat(t, p){
+  if (p.catId){
+    const c = teamCats(t).find(x => x.id === p.catId);
+    if (c) return c;
+  }
   const y = Number(catOf(p));
   return y ? catForYear(t, y) : null;
+}
+// Guarda la categoría elegida en un <select> de categoría: solo queda como
+// override si difiere de la que le toca por año (así sigue los rangos).
+function setPlayerCatChoice(t, p, chosen){
+  const y = Number(catOf(p));
+  const auto = y ? catForYear(t, y) : null;
+  p.catId = (chosen && chosen !== '__new' && chosen !== (auto && auto.id)) ? chosen : null;
+}
+// Llena un <select> de categoría: "Automática (por año)" + las del equipo
+// + "Nueva categoría…". year: año tipeado (para mostrar cuál le toca).
+function fillCatSelect(sel, t, catId, year){
+  const y = Number(year);
+  const auto = y ? catForYear(t, y) : null;
+  const autoTxt = auto ? auto.nombre : (y ? String(y) : '');
+  sel.innerHTML = '<option value="">' + (autoTxt ? 'Automática · ' + esc(autoTxt) : 'Automática (por año)') + '</option>' +
+    teamCats(t).map(c => '<option value="' + c.id + '">' + esc(c.nombre) + '</option>').join('') +
+    '<option value="__new">➕ Nueva categoría…</option>';
+  sel.value = (catId && teamCats(t).some(c => c.id === catId)) ? catId : '';
+}
+function _yearFromInput(id){
+  const v = String(document.getElementById(id).value || '');
+  return /^\d{4}/.test(v) ? v.slice(0, 4) : '';
+}
+// Al tipear el año se actualiza el texto de "Automática · …"
+function catSelYear(selId, yearInputId){
+  const sel = document.getElementById(selId);
+  const t = activeTeam();
+  if (sel && t) fillCatSelect(sel, t, sel.value === '__new' ? '' : sel.value, _yearFromInput(yearInputId));
+}
+async function catSelPicked(sel, yearInputId){
+  if (sel.value !== '__new') return;
+  const t = activeTeam();
+  const y = Number(_yearFromInput(yearInputId));
+  sel.value = '';
+  if (!t) return;
+  if (!y){ toast('Poné primero el año de nacimiento', true); return; }
+  const nombre = await appPromptText('Nueva categoría',
+    'Nombre de la categoría (abarca a los nacidos en ' + y + '; el rango y los días de clase se editan en 📂 Categorías):',
+    'Cat ' + y, 'Ej: Cat 2012, Sub-12…');
+  if (!nombre) return;
+  t.categorias = t.categorias || [];
+  const c = { id:uid(), nombre:nombre, desde:y, hasta:y, dias:[], hora:'' };
+  t.categorias.push(c);
+  saveData();
+  fillCatSelect(sel, t, c.id, y);
+  renderClases(); renderAlumnosList();
+  toast('Categoría "' + nombre + '" creada');
 }
 // Etiqueta de categoría: la del equipo si el año cae en una, si no el año.
 function catLabelFor(t, p){
@@ -1755,7 +1891,7 @@ function saveCat(){
   c.hora = document.getElementById('cfHora').value || '';
   saveData();
   closeOverlay('ovCatForm');
-  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderTeams();
+  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderAlumnos(); renderTeams();
   toast('Categoría guardada');
 }
 async function catDelete(id){
@@ -1786,9 +1922,10 @@ async function catDelete(id){
     }
   });
   S.attendance = S.attendance.filter(a => !a._drop);
+  S.players.forEach(p => { if (p.catId === id) p.catId = null; });
   if (jugCat === id) jugCat = '';
   saveData();
-  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderTeams();
+  renderCatsList(); renderPlayers(); renderPartidos(); renderClases(); renderAlumnos(); renderTeams();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1848,6 +1985,7 @@ function renderPlayers(){
       const e = edad(p.nacimiento);
       const partes = [];
       if (e != null) partes.push(e + ' años');
+      else if (p.nacimiento) partes.push('nac. ' + catOf(p));   // solo el año (alta rápida)
       const pos = posLabel(p);
       if (pos) partes.push(pos);
       if (!p.nacimiento) partes.push('⚠️ falta fecha de nac.');
@@ -1885,6 +2023,10 @@ function renderPosPickers(p){
   document.getElementById('pfPreferida').innerHTML = '<option value="">—</option>' +
     opts.map(o => '<option value="' + esc(o[0]) + '"' + (o[0] === pref ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('');
 }
+function pfNacChange(){
+  document.getElementById('pfNacHint').style.display = 'none';
+  catSelYear('pfCat', 'pfNac');
+}
 function openPlayerForm(id){
   const t = activeTeam();
   if (!t){ toast('Primero creá un equipo', true); return; }
@@ -1893,7 +2035,13 @@ function openPlayerForm(id){
   document.getElementById('pfTitle').textContent = p ? 'Editar jugador' : 'Nuevo jugador';
   document.getElementById('pfNombre').value = p ? p.nombre : '';
   document.getElementById('pfApellido').value = p ? (p.apellido || '') : '';
-  document.getElementById('pfNac').value = p ? (p.nacimiento || '') : '';
+  // nacimiento puede ser fecha completa o solo el año ('2012', del alta rápida en 👥 Alumnos)
+  const soloAnio = !!(p && /^\d{4}$/.test(p.nacimiento || ''));
+  document.getElementById('pfNac').value = (p && !soloAnio) ? (p.nacimiento || '') : '';
+  const nh = document.getElementById('pfNacHint');
+  nh.style.display = soloAnio ? 'block' : 'none';
+  nh.textContent = soloAnio ? 'Por ahora está cargado solo el año (' + p.nacimiento + '). Si sabés la fecha completa, elegila.' : '';
+  fillCatSelect(document.getElementById('pfCat'), t, p ? p.catId : '', p ? catOf(p) : '');
   document.getElementById('pfDesde').value = p ? (p.desdeTemporada || '') : '';
   document.getElementById('pfPie').value = p ? (p.lateralidad.pie || '') : '';
   document.getElementById('pfMano').value = p ? (p.lateralidad.mano || '') : '';
@@ -1919,21 +2067,15 @@ function savePlayer(){
 
   let p = editingId ? S.players.find(x => x.id === editingId) : null;
   if (!p){
-    p = {
-      id: uid(), teamId: t.id,
-      nombre:'', apellido:'', nacimiento:'', desdeTemporada:'',
-      lateralidad:{ pie:'', mano:'', ojo:'' },
-      fisico:{ peso:[], altura:[] },
-      antecedentes:{ aniosPractica:null, otrosDeportes:'' },
-      posicion:{ linea:'', rol:'', otros:[], preferida:'' },
-      historialEquipos:[{ teamId:t.id, desde:todayISO(), hasta:null }],
-      lesiones:[], objetivos:[], notas:'', creado:todayISO()
-    };
+    p = blankPlayer(t);
     S.players.push(p);
   }
   p.nombre = nombre;
   p.apellido = document.getElementById('pfApellido').value.trim();
-  p.nacimiento = document.getElementById('pfNac').value || '';
+  const nac = document.getElementById('pfNac').value || '';
+  // Sin fecha completa elegida se conserva el año suelto que ya tuviera
+  p.nacimiento = nac || (/^\d{4}$/.test(p.nacimiento || '') ? p.nacimiento : '');
+  setPlayerCatChoice(t, p, document.getElementById('pfCat').value);
   p.desdeTemporada = document.getElementById('pfDesde').value.trim();
   p.lateralidad.pie = document.getElementById('pfPie').value;
   p.lateralidad.mano = document.getElementById('pfMano').value;
@@ -1959,7 +2101,7 @@ function savePlayer(){
 
   saveData();
   closeOverlay('ovPlayerForm');
-  renderPlayers();
+  renderPlayers(); renderAlumnos();
   if (fichaId === p.id && document.getElementById('ovFicha').classList.contains('open')) openFicha(p.id);
   toast(editingId ? 'Jugador actualizado' : 'Jugador agregado');
   editingId = null;
@@ -1992,7 +2134,7 @@ function openFicha(id){
     '<div class="ficha-hero">' +
       '<button onclick="fichaPhotoClick()" title="Cambiar foto" style="border-radius:50%">' + avatarHtml(p) + '</button>' +
       '<div><h2>' + esc(p.nombre + ' ' + (p.apellido || '')) + '</h2>' +
-      '<div class="sub">' + (cat ? 'Categoría ' + esc(cat) + ' · ' : '') + (e != null ? e + ' años' : 'sin fecha de nacimiento') + '</div>' +
+      '<div class="sub">' + (cat ? 'Categoría ' + esc(cat) + ' · ' : '') + (e != null ? e + ' años' : (p.nacimiento ? 'nacido en ' + esc(catOf(p)) : 'sin fecha de nacimiento')) + '</div>' +
       '<div class="sub" style="margin-top:5px">📷 <a href="javascript:fichaPhotoClick()" style="color:var(--accent)">' + (p.fotoId ? 'cambiar foto' : 'ponerle foto') + '</a>' +
       (p.fotoId ? ' · <a href="javascript:fichaPhotoRemove()" style="color:var(--danger)">quitar</a>' : '') + '</div></div>' +
     '</div>' +
@@ -2086,6 +2228,7 @@ async function movePlayer(){
   p.historialEquipos = p.historialEquipos || [];
   p.historialEquipos.push({ teamId:dest.id, desde:todayISO(), hasta:null });
   p.teamId = dest.id;
+  p.catId = null;   // las categorías son de cada equipo
   saveData();
   closeOverlay('ovFicha');
   renderPlayers();
@@ -2108,6 +2251,13 @@ async function deletePlayerAsk(){
     '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + '? Se pierde su ficha completa (asistencia, evaluaciones y resultados de pruebas incluidos; en los partidos figura como "Jugador borrado"). Si puede volver, conviene "Exportar ficha" antes.',
     { okLabel:'Eliminar', danger:true });
   if (!ok) return;
+  purgePlayer(p);
+  closeOverlay('ovFicha');
+  renderPlayers(); renderAlumnos();
+  toast('Jugador eliminado');
+}
+// Borra al jugador y limpia sus rastros (lo usan la ficha y 👥 Alumnos)
+function purgePlayer(p){
   const pid = p.id;
   if (p.fotoId) deletePhoto(p.fotoId);
   S.players = S.players.filter(x => x.id !== pid);
@@ -2131,9 +2281,6 @@ async function deletePlayerAsk(){
   });
   crSel = crSel.filter(x => x !== pid);
   saveData();
-  closeOverlay('ovFicha');
-  renderPlayers();
-  toast('Jugador eliminado');
 }
 function importPlayerFile(ev){
   const f = ev.target.files[0];
@@ -2152,6 +2299,7 @@ function importPlayerFile(ev){
       if (cur && !cur.hasta) cur.hasta = todayISO();
       p.historialEquipos.push({ teamId:t.id, desde:todayISO(), hasta:null });
       p.teamId = t.id;
+      p.catId = null;   // la categoría fijada era del equipo de origen
       p.fotoId = (j.photo && /^data:image\//.test(String(j.photo))) ? savePhoto(String(j.photo)) : null;   // la foto viaja en el archivo
       S.players.push(p);
       saveData();
@@ -3652,7 +3800,13 @@ function renderClases(){
   if (!box) return;
   const t = activeTeam();
   if (!t){
-    box.innerHTML = '<div class="empty"><div class="big">🗓️</div>Primero creá un equipo<br>en la pestaña Jugadores.</div>';
+    box.innerHTML = noTeamHtml();
+    return;
+  }
+  if (!teamPlayers(t.id).length){
+    box.innerHTML = '<div class="empty"><div class="big">👥</div>Todavía no hay alumnos en <b>' + esc(t.nombre) + '</b>.<br>' +
+      'Cargá la lista (nombre, apellido, año y categoría)<br>y después pasás lista en un toque.<br><br>' +
+      '<button class="btn" style="max-width:260px" onclick="switchTab(\'alumnos\')">👥 Cargar alumnos</button></div>';
     return;
   }
   const cats = teamCats(t);
@@ -3686,12 +3840,15 @@ function renderClases(){
     '<div class="med-row" style="margin-top:0">' +
       '<div><input type="date" id="asisFecha" value="' + hoy + '" max="' + hoy + '"></div>' +
       '<button class="btn mini" onclick="openAsis(document.getElementById(\'asisFecha\').value)">Abrir</button>' +
-    '</div></div>';
+    '</div>' +
+    '<div class="btn-row full-only"><button class="btn sec" onclick="switchTab(\'alumnos\')">👥 Lista de alumnos (alta rápida)</button></div>' +
+    '</div>';
 
-  // Sesiones de entrenamiento con fecha de HOY
+  // Sesiones de entrenamiento con fecha de HOY (no en modo solo asistencia:
+  // llevan a la Pizarra, que en ese modo no está)
   const sesHoy = S.trainSessions.filter(s => s.teamId === t.id && s.fecha === hoy &&
     (!claseCat || !s.categoria || s.categoria === claseCat));
-  if (sesHoy.length){
+  if (sesHoy.length && !isAsisMode()){
     html += '<div class="card"><h3>🏋️ Sesión de hoy</h3>' +
       sesHoy.map(s => '<button class="mp-row" onclick="switchTab(\'pizarra\');sesOpen(\'' + s.id + '\')">' +
         '<div class="nm">' + esc(s.nombre) + '</div>' +
@@ -3702,7 +3859,7 @@ function renderClases(){
   // Ejercicios de la pizarra planificados para el día de hoy (Etapa 14)
   const exHoy = S.exercises.filter(e => e.teamId === t.id && e.plan && e.plan.dia === dowOf(hoy) &&
     (!claseCat || !e.categoria || e.categoria === claseCat));
-  if (exHoy.length){
+  if (exHoy.length && !isAsisMode()){
     html += '<div class="card"><h3>📋 Ejercicios planificados para hoy</h3>' +
       exHoy.map(e => '<button class="mp-row" onclick="switchTab(\'pizarra\');pzOpen(\'' + e.id + '\')">' +
         '<div class="nm">' + esc(e.nombre) + '</div>' +
@@ -3751,7 +3908,7 @@ function renderClases(){
   // ── Carga de entrenamiento (RPE × minutos), semana actual vs promedio de 4 ──
   const sheetsRpe = S.attendance.filter(a => a.teamId === t.id && (a.catId || null) === (claseCat || null) &&
     a.rpe && Object.keys(a.rpe).length);
-  if (sheetsRpe.length){
+  if (sheetsRpe.length && !isAsisMode()){
     const lunes = isoShift(hoy, -((dowOf(hoy) + 6) % 7));
     const cargaRange = (pid, desde, hasta) =>
       sheetsRpe.filter(a => a.fecha >= desde && a.fecha <= hasta).reduce((m, a) => m + cargaDe(a, pid), 0);
@@ -3827,13 +3984,16 @@ function renderAsis(){
     const m = (a.marks || {})[p.id];
     if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
   });
-  let html = '<p class="hint">Tocá a cada jugador para marcarlo: ✔ presente → ✘ ausente → 🤕 lesionado → sin marcar. Se guarda solo. ' +
-    'A los presentes cargales el <b>RPE</b> (1 = muy suave … 10 = agotador): la app calcula la carga (RPE × minutos).</p>' +
-    '<div class="med-row" style="margin-top:8px"><div><label style="margin-top:0">Duración de la clase (min)</label>' +
+  // En modo solo asistencia no se muestra el RPE (es de la app completa)
+  const conRpe = !isAsisMode();
+  let html = '<p class="hint">Tocá a cada jugador para marcarlo: ✔ presente → ✘ ausente → 🤕 lesionado → sin marcar. Se guarda solo.' +
+    (conRpe ? ' A los presentes cargales el <b>RPE</b> (1 = muy suave … 10 = agotador): la app calcula la carga (RPE × minutos).' : '') + '</p>' +
+    '<div class="med-row full-only" style="margin-top:8px"><div><label style="margin-top:0">Duración de la clase (min)</label>' +
     '<input type="number" inputmode="numeric" min="0" value="' + (a.durMin != null ? a.durMin : '') + '" placeholder="90" onchange="asisSetDur(this.value)"></div></div>' +
     '<div class="btn-row"><button class="btn sec" onclick="attAllP()">✅ Marcar todos presentes</button></div>';
   if (!players.length){
-    html += '<div class="empty">No hay jugadores' + (cat ? ' de esta categoría' : '') + ' en el equipo.</div>';
+    html += '<div class="empty">No hay alumnos' + (cat ? ' de esta categoría' : '') + ' en el equipo.<br><br>' +
+      '<button class="btn" style="max-width:240px" onclick="closeAsis();switchTab(\'alumnos\')">👥 Cargar alumnos</button></div>';
   } else {
     html += players.map(p => {
       const m = (a.marks || {})[p.id] || '';
@@ -3842,7 +4002,7 @@ function renderAsis(){
                  : m === 'L' ? '<span class="att-chip L">🤕 L</span>'
                  : '<span class="att-chip">—</span>';
       const rpeVal = (a.rpe || {})[p.id] || '';
-      const rpeSel = m === 'P'
+      const rpeSel = (m === 'P' && conRpe)
         ? '<select style="width:70px;flex:none;padding:8px 4px;text-align:center" title="RPE (esfuerzo 1-10)" onchange="attSetRpe(\'' + p.id + '\', this.value)">' +
             '<option value="">RPE</option>' +
             [1,2,3,4,5,6,7,8,9,10].map(n => '<option value="' + n + '"' + (rpeVal === n ? ' selected' : '') + '>' + n + '</option>').join('') +
@@ -3906,21 +4066,200 @@ async function asisDelete(){
   saveData();
   closeAsis();
 }
-// Resumen de asistencia para la ficha del jugador (todas las listas)
-function renderAttSummary(p){
+// Totales de asistencia de un jugador sumando todas las listas
+function attTotalsFor(pid){
   let P = 0, A = 0, L = 0;
   S.attendance.forEach(a => {
-    const m = (a.marks || {})[p.id];
+    const m = (a.marks || {})[pid];
     if (m === 'P') P++; else if (m === 'A') A++; else if (m === 'L') L++;
   });
-  if (!(P + A + L)) return '';
   const base = P + A;
-  const pct = base ? Math.round(P * 100 / base) : null;
+  return { P, A, L, pct: base ? Math.round(P * 100 / base) : null };
+}
+// Resumen de asistencia para la ficha del jugador (todas las listas)
+function renderAttSummary(p){
+  const { P, A, L, pct } = attTotalsFor(p.id);
+  if (!(P + A + L)) return '';
   return '<div class="card"><h3>🗓️ Asistencia a clases</h3><div class="datagrid tri">' +
     dgi('Presente', P) + dgi('Ausente', A) + dgi('Lesionado', L) +
     '</div>' +
     (pct != null ? '<p class="hint" style="margin-top:10px">Asistencia: <b>' + pct + '%</b> (los días lesionado no cuentan para el %)</p>' : '') +
     '</div>';
+}
+function noTeamHtml(){
+  return '<div class="empty"><div class="big">🗓️</div>' +
+    '<h2 style="margin-bottom:8px">Asistencia</h2>' +
+    '<p class="hint" style="margin-bottom:18px">Para arrancar, creá tu primer equipo (club o grupo).<br>Después cargás los alumnos y pasás lista.</p>' +
+    '<button class="btn" style="max-width:260px" onclick="teamCreate()">➕ Crear mi primer equipo</button></div>';
+}
+
+/* --- pestaña 👥 Alumnos: lista rápida (nombre, apellido, año, categoría) ---
+   Son los mismos jugadores del equipo (S.players); el alta rápida guarda
+   solo el año de nacimiento en `nacimiento` ('2012') y, si se elige una
+   categoría distinta a la que le toca por año, la fija en `catId`. */
+let aluCat = '';          // filtro por categoría en la lista
+let aluSearch = '';
+let aluEditId = null;     // alumno abierto en ovAlumno
+let qaYear = '', qaCatSel = '';   // se recuerdan para cargar el siguiente rápido
+
+function blankPlayer(t){
+  return {
+    id: uid(), teamId: t.id,
+    nombre:'', apellido:'', nacimiento:'', desdeTemporada:'', catId:null,
+    lateralidad:{ pie:'', mano:'', ojo:'' },
+    fisico:{ peso:[], altura:[] },
+    antecedentes:{ aniosPractica:null, otrosDeportes:'' },
+    posicion:{ linea:'', rol:'', otros:[], preferida:'' },
+    historialEquipos:[{ teamId:t.id, desde:todayISO(), hasta:null }],
+    lesiones:[], objetivos:[], notas:'', creado:todayISO()
+  };
+}
+function validBirthYear(y){ return y >= 1940 && y <= new Date().getFullYear(); }
+
+function renderAlumnos(){
+  const box = document.getElementById('alumnosContent');
+  if (!box) return;
+  const t = activeTeam();
+  if (!t){ box.innerHTML = noTeamHtml(); return; }
+  const cats = teamCats(t);
+  if (aluCat && !cats.some(c => c.id === aluCat)) aluCat = '';
+  const ent = 'onkeydown="if(event.key===\'Enter\')alumnoAdd()"';
+  box.innerHTML =
+    '<div class="card qa-card"><h3>➕ Agregar alumno</h3>' +
+    '<div class="form-grid">' +
+      '<div><label>Nombre *</label><input id="qaNombre" autocomplete="off" ' + ent + '></div>' +
+      '<div><label>Apellido</label><input id="qaApellido" autocomplete="off" ' + ent + '></div>' +
+      '<div class="full"><label>Año de nacimiento</label><input id="qaAnio" type="number" inputmode="numeric" min="1940" max="2100" placeholder="Ej: 2012" value="' + esc(qaYear) + '" oninput="catSelYear(\'qaCat\', \'qaAnio\')" ' + ent + '></div>' +
+      '<div class="full"><label>Categoría</label><select id="qaCat" onchange="catSelPicked(this, \'qaAnio\')"></select></div>' +
+    '</div>' +
+    '<div class="btn-row"><button class="btn" onclick="alumnoAdd()">➕ Agregar a la lista</button></div>' +
+    '<p class="hint" style="margin-top:8px">El año y la categoría quedan puestos para cargar el siguiente más rápido.</p></div>' +
+
+    '<div class="card"><h3 id="aluTitle">👥 Lista de alumnos</h3>' +
+    (cats.length ? '<div class="chips">' +
+      '<button class="chip' + (aluCat === '' ? ' on' : '') + '" onclick="setAluCat(\'\')">Todas</button>' +
+      cats.map(c => '<button class="chip' + (aluCat === c.id ? ' on' : '') + '" onclick="setAluCat(\'' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
+      '</div>' : '') +
+    '<div class="toolbar"><input id="aluSearchInp" placeholder="🔍 Buscar alumno…" value="' + esc(aluSearch) + '" oninput="aluSearch=this.value;renderAlumnosList()"></div>' +
+    '<div id="aluList"></div>' +
+    '<div class="btn-row"><button class="btn sec" onclick="openCatsManager(\'' + t.id + '\')">📂 Categorías y días de clase</button></div>' +
+    '</div>';
+  fillCatSelect(document.getElementById('qaCat'), t, qaCatSel, qaYear);
+  renderAlumnosList();
+}
+function setAluCat(id){ aluCat = id; renderAlumnos(); }
+// Solo la lista (sin tocar el formulario de alta: no pierde lo tipeado)
+function renderAlumnosList(){
+  const box = document.getElementById('aluList');
+  const t = activeTeam();
+  if (!box || !t) return;
+  const all = teamPlayers(t.id);
+  let list = all;
+  if (aluCat) list = list.filter(p => (playerCat(t, p) || {}).id === aluCat);
+  // Búsqueda sin tildes ni mayúsculas ("gomez" encuentra "Gómez")
+  const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const q = fold(aluSearch.trim());
+  if (q) list = list.filter(p => fold(p.nombre + ' ' + (p.apellido || '')).includes(q));
+  list.sort((a, b) => ((a.apellido || '') + a.nombre).localeCompare((b.apellido || '') + b.nombre, 'es'));
+  document.getElementById('aluTitle').textContent = '👥 Lista de alumnos · ' + all.length;
+  if (!all.length){
+    box.innerHTML = '<p class="hint">Todavía no hay alumnos. Cargá el primero arriba.</p>';
+    return;
+  }
+  if (!list.length){
+    box.innerHTML = '<p class="hint">No hay alumnos que coincidan.</p>';
+    return;
+  }
+  box.innerHTML = list.map(p => {
+    const e = edad(p.nacimiento);
+    const st = attTotalsFor(p.id);
+    const partes = [];
+    if (p.nacimiento) partes.push('nac. ' + catOf(p) + (e != null ? ' (' + e + ' años)' : ''));
+    else partes.push('⚠️ falta el año');
+    if (st.pct != null) partes.push('asist. ' + st.pct + '%');
+    const cat = catLabelFor(t, p);
+    return '<button class="player-card" onclick="openAlumno(\'' + p.id + '\')">' +
+      avatarHtml(p) +
+      '<div class="pc-info"><div class="pc-name">' + esc((p.apellido ? p.apellido + ', ' : '') + p.nombre) + '</div>' +
+      '<div class="pc-sub">' + esc(partes.join(' · ')) + '</div></div>' +
+      (cat ? '<div class="pc-cat">' + esc(cat) + '</div>' : '') +
+      '</button>';
+  }).join('') +
+  (list.length !== all.length ? '<p class="hint" style="text-align:center;margin-top:6px">' + list.length + ' de ' + all.length + '</p>' : '');
+}
+async function alumnoAdd(){
+  const t = activeTeam();
+  if (!t){ toast('Primero creá un equipo', true); return; }
+  const nombre = document.getElementById('qaNombre').value.trim();
+  const apellido = document.getElementById('qaApellido').value.trim();
+  const anio = document.getElementById('qaAnio').value.trim();
+  const catSel = document.getElementById('qaCat').value;
+  if (!nombre){ toast('Falta el nombre', true); document.getElementById('qaNombre').focus(); return; }
+  if (anio && !validBirthYear(Number(anio))){ toast('Año de nacimiento inválido', true); return; }
+  const full = (nombre + ' ' + apellido).trim().toLowerCase();
+  if (teamPlayers(t.id).some(p => (p.nombre + ' ' + (p.apellido || '')).trim().toLowerCase() === full)){
+    const ok = await appConfirm('Alumno repetido', 'Ya hay un "' + (nombre + ' ' + apellido).trim() + '" en la lista. ¿Agregarlo igual?', { okLabel:'Agregar' });
+    if (!ok) return;
+  }
+  const p = blankPlayer(t);
+  p.nombre = nombre;
+  p.apellido = apellido;
+  p.nacimiento = anio ? String(Number(anio)) : '';
+  setPlayerCatChoice(t, p, catSel);
+  S.players.push(p);
+  saveData();
+  qaYear = anio; qaCatSel = catSel;
+  renderAlumnos(); renderPlayers();
+  const inp = document.getElementById('qaNombre');
+  if (inp) inp.focus();
+  toast(nombre + ' agregado');
+}
+function openAlumno(id){
+  const p = S.players.find(x => x.id === id);
+  const t = activeTeam();
+  if (!p || !t) return;
+  aluEditId = id;
+  document.getElementById('aeNombre').value = p.nombre;
+  document.getElementById('aeApellido').value = p.apellido || '';
+  document.getElementById('aeAnio').value = catOf(p) || '';
+  fillCatSelect(document.getElementById('aeCat'), t, p.catId, catOf(p));
+  document.getElementById('aeExtra').innerHTML =
+    renderAttSummary(p) +
+    '<div class="btn-row full-only"><button class="btn sec" onclick="closeOverlay(\'ovAlumno\');openFicha(\'' + p.id + '\')">📄 Ver ficha completa</button></div>' +
+    '<div class="btn-row"><button class="btn danger" onclick="alumnoDelete()">🗑 Eliminar alumno</button></div>';
+  openOverlay('ovAlumno');
+}
+function alumnoSave(){
+  const p = S.players.find(x => x.id === aluEditId);
+  const t = activeTeam();
+  if (!p || !t) return;
+  const nombre = document.getElementById('aeNombre').value.trim();
+  const anio = document.getElementById('aeAnio').value.trim();
+  if (!nombre){ toast('Falta el nombre', true); return; }
+  if (anio && !validBirthYear(Number(anio))){ toast('Año de nacimiento inválido', true); return; }
+  p.nombre = nombre;
+  p.apellido = document.getElementById('aeApellido').value.trim();
+  // Si el año no cambió se conserva la fecha completa (si la tenía)
+  if (!anio) p.nacimiento = '';
+  else if (String(Number(anio)) !== catOf(p)) p.nacimiento = String(Number(anio));
+  setPlayerCatChoice(t, p, document.getElementById('aeCat').value);
+  saveData();
+  closeOverlay('ovAlumno');
+  renderAlumnos(); renderPlayers();
+  toast('Alumno actualizado');
+}
+async function alumnoDelete(){
+  const p = S.players.find(x => x.id === aluEditId);
+  if (!p) return;
+  const ok = await appConfirm('Eliminar alumno',
+    '¿Eliminar a ' + p.nombre + ' ' + (p.apellido || '') + ' de la lista? Se borra también su asistencia y el resto de su ficha.',
+    { okLabel:'Eliminar', danger:true });
+  if (!ok) return;
+  purgePlayer(p);
+  closeOverlay('ovAlumno');
+  aluEditId = null;
+  renderAlumnos(); renderPlayers();
+  toast('Alumno eliminado');
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -6072,7 +6411,7 @@ function aoaJugadores(t){
       const lp = lastOf(p.fisico.peso), la = lastOf(p.fisico.altura);
       const e = edad(p.nacimiento);
       return [
-        p.apellido || '', p.nombre, p.nacimiento ? fmtFecha(p.nacimiento) : '', catOf(p) || '',
+        p.apellido || '', p.nombre, p.nacimiento ? fmtFecha(p.nacimiento) : '', catLabelFor(t, p) || '',
         e != null ? e : '', p.desdeTemporada || '', posLabel(p) || '',
         (p.posicion.otros || []).map(posKeyLabel).join(', '),
         p.posicion.preferida ? posKeyLabel(p.posicion.preferida) : '',
@@ -6836,7 +7175,7 @@ function importBackupFile(ev){
       // otro dispositivo — los videos no viajan)
       pruneOrphanPhotos();
       syncMediaStore();
-      renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderPizarra();
+      renderTeamBar(); renderPlayers(); renderPruebas(); renderCrono(); renderPartidos(); renderStats(); renderClases(); renderAlumnos(); renderPizarra();
       toast('Copia importada');
     } catch(e){
       if (e !== undefined) toast('El archivo no es una copia de PruevaCero', true);
@@ -7229,7 +7568,7 @@ function syRefrescarPantalla(){
     renderPlayers();
     // Redibujar la pestaña actual SIN switchTab (que hace scroll al tope).
     const R = { pruebas:renderPruebas, crono:renderCrono, partidos:renderPartidos,
-                stats:renderStats, clases:renderClases, pizarra:renderPizarra,
+                stats:renderStats, clases:renderClases, alumnos:renderAlumnosList, pizarra:renderPizarra,
                 config:renderSyncCard };
     if (R[UI.tab]) R[UI.tab]();
     if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
@@ -7330,7 +7669,19 @@ function boot(){
   if (UI.teamId && !S.teams.some(t => t.id === UI.teamId)) UI.teamId = null;
   if (!UI.teamId && S.teams.length) UI.teamId = S.teams[0].id;
 
+  // Link directo ?modo=asistencia (o ?modo=completo): fija el modo y limpia la URL
+  try {
+    const qm = new URLSearchParams(location.search).get('modo');
+    if (qm){
+      UI.modo = (qm === 'asistencia' || qm === 'asis') ? 'asis' : '';
+      if (UI.modo === 'asis') UI.tab = 'clases';
+      saveUI();
+      history.replaceState(null, '', location.pathname);
+    }
+  } catch(e){}
+
   applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  applyMode();
   refreshInstallCard();
   renderTeamBar();
   renderPlayers();
@@ -7343,6 +7694,7 @@ function boot(){
   hydratePhotoCache().then(() => {
     renderTeamBar();
     renderPlayers();
+    renderAlumnosList();
     if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
   }).catch(() => {});   // sin fotos la app igual funciona
 

@@ -38,6 +38,20 @@ automáticos.
   e informe PDF del jugador.
 - El "elo test" de los audios se interpreta como **test Yo-Yo** (resistencia
   intermitente). Confirmar con el cuerpo técnico.
+- **Asistencia como "app" propia (2026-10-20)**: el único tester activo por
+  ahora solo pasa lista, así que la asistencia tiene que sobresalir y poder
+  usarse como si fuera independiente del resto. Se resolvió con un **modo
+  solo asistencia** (`UI.modo = 'asis'`, por aparato): la barra inferior
+  queda en 🗓️ Asistencia + 👥 Alumnos (Config en el ⚙️ del header) y se
+  esconde todo lo demás (pruebas, crono, partidos, pizarra, stats, RPE,
+  ficha completa). Se activa con el link `?modo=asistencia` (Julio se lo
+  pasa al tester; queda guardado) o desde Config; se vuelve con "Abrir la
+  app completa". Los datos son los mismos: nada se duplica. En la app
+  completa, Asistencia pasó a ser la PRIMERA pestaña.
+- **Lista rápida de alumnos (2026-10-20)**: alta con solo nombre, apellido,
+  AÑO de nacimiento y categoría (pestaña 👥 Alumnos). La categoría por
+  defecto sale del año (como siempre), pero se puede elegir otra a mano o
+  crear una nueva desde el mismo selector.
 - **Cronómetro grupal con pestaña propia (2026-07-07)**: pestaña ⏱ Crono.
   Selección de participantes por categoría/año o manual, cronómetros
   individuales por jugador, largada grupal 3·2·1 (beep+vibración), play/stop
@@ -99,7 +113,8 @@ attendance = [ {                 // una lista de asistencia por (equipo, categor
 
 player = {
   id, teamId,                                          // equipo actual
-  nombre, apellido, nacimiento (fecha completa),       // año => categoría
+  nombre, apellido, nacimiento,                        // 'AAAA-MM-DD' o solo 'AAAA' (alta rápida) — año => categoría
+  catId?,                                              // categoría fijada a mano (override de playerCat); null = por año
   desdeTemporada?,                                     // temporada de ingreso al club (texto libre: "2024" o "2024/25")
   fotoId?,                                             // foto en IndexedDB
   lateralidad: { pie, mano, ojo },
@@ -220,6 +235,10 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
      sombreadas, vista chapitas/figuras, y ficha completa del ejercicio
      (descripción, materiales, participantes, dosificación, periodización).
   7. **⚙️ Config** — equipos, backup JSON, exportes, tema (botón en header).
+- Desde 2026-10-20 la barra arranca con **🗓️ Asistencia** (antes "Clases")
+  y existe la pestaña **👥 Alumnos** (lista rápida; en la app completa se
+  entra desde un botón en Asistencia). En **modo solo asistencia** la barra
+  muestra únicamente Asistencia + Alumnos.
 
 ## Etapas de implementación
 
@@ -259,6 +278,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 30 | **Guías 2.0 + etiquetas + carriles pintados** (pedidos 2026-07-13): `board.guide` pasa a objeto `{tipo, cols, rows, nums}` (compat con string viejo, `pzGuideNorm`); overlay ▦ `ovGuide`: cuadrícula PERSONALIZABLE (2-12 × 2-16) con 🔢 numeración de zonas (también numera los 5 carriles); 🖌 "Pintar carril" crea una zona rectangular exacta sobre cualquiera de los 5 carriles (laterales/internos/central) para marcar por dónde atacar; 🏷 en zonas = etiqueta estratégica centrada (Zona de creación/ataque/defensa/entrada, texto libre); arreglado de paso: el canvas ahora respeta la rotación de zonas | HECHA (2026-07-13) |
 | 31 | **Fix offline (reporte de un usuario 2026-08-11)**: la app no abría en canchas sin señal. Causas: los tags CDN de SheetJS/jsPDF con `defer` en el `<head>` bloqueaban `DOMContentLoaded` (donde arranca todo) y la navegación esperaba a la red sin timeout. Ahora: librerías bajo demanda (`loadCdnLib`) + precacheadas, SW con timeout de 3 s → cache, install que falla si no puede guardar el HTML y activate que no borra el cache viejo hasta tener el nuevo | HECHA (2026-08-12) |
 | 32 | **Sincronización entre dispositivos** (pedido 2026-08-11): cuenta con mail+contraseña y los mismos datos en el teléfono y la computadora. Supabase (proyecto `pruevacero`), tabla única `registros` con RLS por usuario; los cambios se anotan por huella en `saveData()` y se suben/bajan de fondo con cursor; conflicto = gana el cambio más nuevo (lo decide la base); fotos y escudos a Storage (los videos de la pizarra NO viajan, igual que en el backup). Sin cuenta o sin señal la app funciona exactamente igual | HECHA (2026-08-12) |
+| 33 | **Modo solo asistencia + lista rápida de alumnos** (pedido 2026-10-20 para el tester que por ahora solo pasa lista): `UI.modo='asis'` (link `?modo=asistencia` o botón en Config; `applyMode`/`switchTab` esconden todo lo `.full-only` y redirigen pestañas ajenas a Asistencia; sin RPE ni tarjetas de pizarra); pestaña 👥 Alumnos (`renderAlumnos`): alta con nombre/apellido/año/categoría que recuerda año y categoría para el siguiente, búsqueda sin tildes, filtro por categoría, edición rápida `ovAlumno`; `nacimiento` acepta solo el año; `p.catId` fija la categoría (selector "Automática · X" + "➕ Nueva categoría…" también en el form completo); Asistencia pasa a ser la 1ª pestaña | HECHA (2026-10-20) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 
