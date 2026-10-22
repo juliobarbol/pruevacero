@@ -240,6 +240,12 @@ html[data-theme="light"] .btn{color:#fff}
 body.modo-asis .full-only{display:none !important}
 body:not(.modo-asis) .asis-only{display:none !important}
 .qa-card{border-color:var(--accent)}
+.cat-pick{flex-wrap:wrap;overflow:visible}
+.cat-pick .chip{padding:9px 14px;font-size:14px}
+.chip .cnt{font-size:11.5px;opacity:.7;margin-left:2px}
+.install-card{border-color:var(--info)}
+.install-card ol{margin:8px 0 0 20px;font-size:13.5px;line-height:1.5}
+.install-card li{margin-bottom:6px}
 .link-box{font-size:12.5px;word-break:break-all;background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:9px 11px;margin-top:10px;user-select:all}
 
 /* ============================ ESTADÍSTICAS ============================ */
@@ -1583,6 +1589,12 @@ function applyMode(){
   document.body.classList.toggle('modo-asis', asis);
   document.getElementById('brandIc').textContent = asis ? '🗓️' : '⚽';
   document.title = asis ? 'PruevaCero · Asistencia' : 'PruevaCero';
+  // Para que el ícono que se ponga en el teléfono abra en este mismo modo:
+  // manifest con start_url ?modo=asistencia y la URL actual con el parámetro
+  // (iOS usa una u otra según la versión). En la app completa, URL limpia.
+  const mf = document.querySelector('link[rel="manifest"]');
+  if (mf) mf.setAttribute('href', asis ? 'manifest-asis.webmanifest' : 'manifest.webmanifest');
+  try { history.replaceState(null, '', location.pathname + (asis ? '?modo=asistencia' : '')); } catch(e){}
   renderModoCard();
 }
 function setAppMode(m){
@@ -1802,6 +1814,46 @@ function catSelYear(selId, yearInputId){
   const sel = document.getElementById(selId);
   const t = activeTeam();
   if (sel && t) fillCatSelect(sel, t, sel.value === '__new' ? '' : sel.value, _yearFromInput(yearInputId));
+}
+// Chips para elegir categoría (Asistencia y Alumnos): "Todos" + las
+// categorías del equipo + un chip por cada AÑO de nacimiento de alumnos que
+// todavía no cae en ninguna categoría. Tocar un año crea solo la categoría
+// de ese año (así filtrar por año funciona aunque no se hayan creado
+// categorías a mano). target: 'clase' | 'alu'.
+const CAT_CHIP_FN = { clase:'setClaseCat', alu:'setAluCat' };
+function catChipsHtml(t, selected, target, todosTxt){
+  const fn = CAT_CHIP_FN[target];
+  const cats = teamCats(t);
+  const yrs = {};
+  teamPlayers(t.id).forEach(p => {
+    const y = Number(catOf(p));
+    if (y && !playerCat(t, p)) yrs[y] = (yrs[y] || 0) + 1;
+  });
+  const years = Object.keys(yrs).map(Number).sort((a, b) => b - a);
+  if (!cats.length && !years.length) return '';
+  return '<div class="chips cat-pick">' +
+    '<button class="chip' + (selected === '' ? ' on' : '') + '" onclick="' + fn + '(\'\')">' + todosTxt + '</button>' +
+    cats.map(c => {
+      const n = teamPlayers(t.id).filter(p => playerCat(t, p) === c).length;
+      return '<button class="chip' + (selected === c.id ? ' on' : '') + '" onclick="' + fn + '(\'' + c.id + '\')">' +
+        esc(c.nombre) + ' <span class="cnt">' + n + '</span></button>';
+    }).join('') +
+    years.map(y => '<button class="chip" onclick="catFromYear(' + y + ', \'' + target + '\')">' +
+      y + ' <span class="cnt">' + yrs[y] + '</span></button>').join('') +
+    '</div>';
+}
+function catFromYear(y, target){
+  const t = activeTeam();
+  if (!t || !CAT_CHIP_FN[target]) return;
+  t.categorias = t.categorias || [];
+  let c = catForYear(t, y);
+  if (!c){
+    c = { id:uid(), nombre:'Cat ' + y, desde:y, hasta:y, dias:[], hora:'' };
+    t.categorias.push(c);
+    saveData();
+    toast('Categoría "' + c.nombre + '" creada (nacidos en ' + y + ')');
+  }
+  window[CAT_CHIP_FN[target]](c.id);
 }
 async function catSelPicked(sel, yearInputId){
   if (sel.value !== '__new') return;
@@ -3813,13 +3865,14 @@ function renderClases(){
   if (claseCat && !cats.some(c => c.id === claseCat)) claseCat = '';
   const ccat = claseCat ? cats.find(c => c.id === claseCat) : null;
 
-  let html = '';
-  if (cats.length){
-    html += '<div class="chips">' +
-      '<button class="chip' + (claseCat === '' ? ' on' : '') + '" onclick="setClaseCat(\'\')">Todo el equipo</button>' +
-      cats.map(c => '<button class="chip' + (claseCat === c.id ? ' on' : '') + '" onclick="setClaseCat(\'' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
-      '</div>';
+  let html = installCardHtml();
+  const chipsCat = catChipsHtml(t, claseCat, 'clase', 'Todo el equipo');
+  if (chipsCat){
+    html += '<div class="card"><h3>👥 ¿De qué categoría tomás lista?</h3>' +
+      '<p class="hint" style="margin-bottom:10px">Elegí una y la lista muestra solo a esos chicos. ' +
+      'Los años sueltos (ej. 2012) arman su categoría al tocarlos.</p>' + chipsCat + '</div>';
   }
+  const nLista = teamPlayers(t.id).filter(p => !ccat || ((playerCat(t, p) || {}).id === ccat.id)).length;
 
   const hoy = todayISO();
   let schedTxt = '';
@@ -3836,6 +3889,7 @@ function renderClases(){
   html += '<div class="card"><h3>📋 Pasar lista' + (ccat ? ' · ' + esc(ccat.nombre) : '') + '</h3>' +
     (schedTxt ? '<p class="hint">' + schedTxt + '</p>' : '') +
     '<div class="btn-row" style="margin-top:10px"><button class="btn" onclick="openAsis(\'' + hoy + '\')">📋 Pasar lista de HOY (' + fmtFecha(hoy) + ')</button></div>' +
+    '<p class="hint" style="margin-top:6px;text-align:center">' + (ccat ? 'Solo ' + esc(ccat.nombre) : 'Todo el equipo') + ' · ' + nLista + ' alumno' + (nLista === 1 ? '' : 's') + '</p>' +
     '<label>Otra fecha (cargar o corregir un día que no se pasó lista)</label>' +
     '<div class="med-row" style="margin-top:0">' +
       '<div><input type="date" id="asisFecha" value="' + hoy + '" max="' + hoy + '"></div>' +
@@ -4090,7 +4144,13 @@ function noTeamHtml(){
   return '<div class="empty"><div class="big">🗓️</div>' +
     '<h2 style="margin-bottom:8px">Asistencia</h2>' +
     '<p class="hint" style="margin-bottom:18px">Para arrancar, creá tu primer equipo (club o grupo).<br>Después cargás los alumnos y pasás lista.</p>' +
-    '<button class="btn" style="max-width:260px" onclick="teamCreate()">➕ Crear mi primer equipo</button></div>';
+    '<button class="btn" style="max-width:260px" onclick="teamCreate()">➕ Crear mi primer equipo</button>' +
+    // Caso típico: app recién puesta con ícono en iPhone (arranca vacía) o teléfono nuevo
+    (syLogueado()
+      ? '<p class="hint" style="margin-top:18px">Si tus alumnos ya están en tu cuenta, aparecen solos en unos segundos (con señal).</p>'
+      : '<p class="hint" style="margin-top:22px">¿Ya cargaste alumnos en Safari o en otro teléfono?<br>Entrá con tu cuenta y aparecen solos:</p>' +
+        '<button class="btn sec" style="max-width:260px;margin-top:8px" onclick="goSyncCard()">☁️ Entrar con mi cuenta</button>') +
+    '</div>';
 }
 
 /* --- pestaña 👥 Alumnos: lista rápida (nombre, apellido, año, categoría) ---
@@ -4136,10 +4196,7 @@ function renderAlumnos(){
     '<p class="hint" style="margin-top:8px">El año y la categoría quedan puestos para cargar el siguiente más rápido.</p></div>' +
 
     '<div class="card"><h3 id="aluTitle">👥 Lista de alumnos</h3>' +
-    (cats.length ? '<div class="chips">' +
-      '<button class="chip' + (aluCat === '' ? ' on' : '') + '" onclick="setAluCat(\'\')">Todas</button>' +
-      cats.map(c => '<button class="chip' + (aluCat === c.id ? ' on' : '') + '" onclick="setAluCat(\'' + c.id + '\')">' + esc(c.nombre) + '</button>').join('') +
-      '</div>' : '') +
+    catChipsHtml(t, aluCat, 'alu', 'Todos') +
     '<div class="toolbar"><input id="aluSearchInp" placeholder="🔍 Buscar alumno…" value="' + esc(aluSearch) + '" oninput="aluSearch=this.value;renderAlumnosList()"></div>' +
     '<div id="aluList"></div>' +
     '<div class="btn-row"><button class="btn sec" onclick="openCatsManager(\'' + t.id + '\')">📂 Categorías y días de clase</button></div>' +
@@ -7213,11 +7270,51 @@ function refreshInstallCard(){
   row.style.display = 'none';
   if (_isIOS()){
     help.innerHTML = 'En iPhone/iPad: tocá <b>Compartir</b> (el cuadradito con la ' +
-      'flecha ↑, abajo en Safari) y elegí <b>“Agregar a inicio”</b>.';
+      'flecha ↑, abajo en Safari) y elegí <b>“Agregar a pantalla de inicio”</b>.<br><br>' +
+      '⚠️ En iPhone la app del ícono guarda sus datos APARTE de Safari: arranca vacía. ' +
+      'Para llevar lo que ya cargaste, antes creá tu cuenta en “Usar en varios dispositivos” ' +
+      '(acá arriba) y después entrá con la misma cuenta desde la app del ícono.';
   } else {
     help.textContent = 'Si no aparece el botón, abrí el menú del navegador (⋮) y ' +
       'elegí “Instalar app” o “Agregar a pantalla de inicio”.';
   }
+}
+// Tarjeta bien visible arriba de 🗓️ Asistencia para poner el ícono en el
+// teléfono (pedido del tester 2026-10-22). Solo si todavía no está instalada
+// y se puede instalar (iPhone, o Android/Chrome con el prompt disponible).
+// En iPhone la app del ícono tiene su PROPIO almacenamiento (no ve lo cargado
+// en Safari): por eso el paso de la cuenta va primero.
+function installCardHtml(){
+  if (_isStandalone() || UI.installHide) return '';
+  const ios = _isIOS();
+  if (!ios && !_deferredInstall) return '';
+  const cerrar = '<button class="icon-btn" style="width:32px;height:32px;font-size:14px" onclick="installHide()" title="Ocultar">✕</button>';
+  const head = '<div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">📲 Tener la app con ícono en el teléfono</h3>' + cerrar + '</div>';
+  if (!ios){
+    return '<div class="card install-card">' + head +
+      '<p class="hint" style="margin-top:6px">Se abre como una app más, a pantalla completa y sin internet.</p>' +
+      '<div class="btn-row"><button class="btn" onclick="pwaInstall()">📲 Poner el ícono</button></div></div>';
+  }
+  const conCuenta = syLogueado();
+  return '<div class="card install-card">' + head +
+    '<ol>' +
+      (conCuenta
+        ? '<li>✅ Ya tenés cuenta (' + esc(SY.email || '') + '): tus alumnos van a pasar solos a la app del ícono.</li>'
+        : '<li><b>Primero guardá tus datos en una cuenta</b>: en el iPhone la app del ícono arranca VACÍA (no ve lo cargado en Safari). ' +
+          '<a href="javascript:goSyncCard()" style="color:var(--accent)">Crear cuenta ☁️</a></li>') +
+      '<li>En <b>Safari</b> tocá <b>Compartir</b> (el cuadradito con la flecha ↑, abajo) y elegí <b>“Agregar a pantalla de inicio”</b> → <b>Agregar</b>.</li>' +
+      '<li>Abrí la app desde el ícono nuevo, tocá ⚙️ y <b>entrá con el mismo mail y contraseña</b>: aparecen todos tus alumnos.</li>' +
+    '</ol></div>';
+}
+function goSyncCard(){
+  switchTab('config');
+  const el = document.getElementById('syncCard');
+  if (el) el.scrollIntoView({ block:'start' });
+}
+function installHide(){
+  UI.installHide = true; saveUI();
+  renderClases();
+  toast('Listo. La ayuda queda en ⚙️ → “Instalar en el teléfono”');
 }
 async function pwaInstall(){
   if (!_deferredInstall){ refreshInstallCard(); return; }
@@ -7226,16 +7323,19 @@ async function pwaInstall(){
   ev.prompt();
   try { await ev.userChoice; } catch(e){}
   refreshInstallCard();
+  if (UI.tab === 'clases') renderClases();
 }
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();          // evitamos el mini-banner y lo mostramos nosotros
   _deferredInstall = e;
   refreshInstallCard();
+  if (typeof UI !== 'undefined' && UI.tab === 'clases') renderClases();
 });
 window.addEventListener('appinstalled', () => {
   _deferredInstall = null;
   toast('✅ App instalada');
   refreshInstallCard();
+  if (UI.tab === 'clases') renderClases();
 });
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -7564,11 +7664,16 @@ async function syFotos(){
 /* ── Pantalla ────────────────────────────────────────────────────── */
 function syRefrescarPantalla(){
   try {
+    // Aparato nuevo (ej. la app del ícono en iPhone): al bajar los datos no
+    // había equipo activo → elegir el primero, si no se ve "creá tu equipo".
+    if (!activeTeam() && S.teams.length){ UI.teamId = S.teams[0].id; saveUI(); }
     renderTeamBar();
     renderPlayers();
     // Redibujar la pestaña actual SIN switchTab (que hace scroll al tope).
     const R = { pruebas:renderPruebas, crono:renderCrono, partidos:renderPartidos,
-                stats:renderStats, clases:renderClases, alumnos:renderAlumnosList, pizarra:renderPizarra,
+                stats:renderStats, clases:renderClases, pizarra:renderPizarra,
+                // Alumnos: no pisar lo que se esté tipeando en el alta rápida
+                alumnos:() => (document.getElementById('qaNombre') ? renderAlumnosList() : renderAlumnos()),
                 config:renderSyncCard };
     if (R[UI.tab]) R[UI.tab]();
     if (document.getElementById('ovFicha').classList.contains('open') && fichaId) openFicha(fichaId);
@@ -7669,14 +7774,15 @@ function boot(){
   if (UI.teamId && !S.teams.some(t => t.id === UI.teamId)) UI.teamId = null;
   if (!UI.teamId && S.teams.length) UI.teamId = S.teams[0].id;
 
-  // Link directo ?modo=asistencia (o ?modo=completo): fija el modo y limpia la URL
+  // Link directo ?modo=asistencia (o ?modo=completo): fija el modo (applyMode
+  // después deja la URL con o sin el parámetro según el modo)
   try {
     const qm = new URLSearchParams(location.search).get('modo');
     if (qm){
+      const antes = UI.modo;
       UI.modo = (qm === 'asistencia' || qm === 'asis') ? 'asis' : '';
-      if (UI.modo === 'asis') UI.tab = 'clases';
+      if (UI.modo === 'asis' && antes !== 'asis') UI.tab = 'clases';
       saveUI();
-      history.replaceState(null, '', location.pathname);
     }
   } catch(e){}
 

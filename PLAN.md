@@ -52,6 +52,15 @@ automáticos.
   AÑO de nacimiento y categoría (pestaña 👥 Alumnos). La categoría por
   defecto sale del año (como siempre), pero se puede elegir otra a mano o
   crear una nueva desde el mismo selector.
+- **Filtrar por año/categoría y ícono en el iPhone (audio del tester
+  2026-10-22)**: cargó 20 y pico de alumnos con año pero sin categorías, y no
+  encontraba cómo tomar lista "solo de cada categoría"; además preguntó cómo
+  dejar el ícono en el iPhone. Decisión: los AÑOS sueltos aparecen como
+  chips junto a las categorías y tocarlos crea la categoría de ese año (un
+  solo concepto, sin listas "por año" paralelas). La ayuda para el ícono va
+  arriba de Asistencia (no escondida en Config) y avisa que en iPhone la app
+  del ícono tiene almacenamiento PROPIO (arranca vacía): primero cuenta de
+  sincronización, después entrar con la misma cuenta desde el ícono.
 - **Cronómetro grupal con pestaña propia (2026-07-07)**: pestaña ⏱ Crono.
   Selección de participantes por categoría/año o manual, cronómetros
   individuales por jugador, largada grupal 3·2·1 (beep+vibración), play/stop
@@ -279,6 +288,7 @@ cargan a mano. Peso y altura se guardan con fecha (historial de crecimiento).
 | 31 | **Fix offline (reporte de un usuario 2026-08-11)**: la app no abría en canchas sin señal. Causas: los tags CDN de SheetJS/jsPDF con `defer` en el `<head>` bloqueaban `DOMContentLoaded` (donde arranca todo) y la navegación esperaba a la red sin timeout. Ahora: librerías bajo demanda (`loadCdnLib`) + precacheadas, SW con timeout de 3 s → cache, install que falla si no puede guardar el HTML y activate que no borra el cache viejo hasta tener el nuevo | HECHA (2026-08-12) |
 | 32 | **Sincronización entre dispositivos** (pedido 2026-08-11): cuenta con mail+contraseña y los mismos datos en el teléfono y la computadora. Supabase (proyecto `pruevacero`), tabla única `registros` con RLS por usuario; los cambios se anotan por huella en `saveData()` y se suben/bajan de fondo con cursor; conflicto = gana el cambio más nuevo (lo decide la base); fotos y escudos a Storage (los videos de la pizarra NO viajan, igual que en el backup). Sin cuenta o sin señal la app funciona exactamente igual | HECHA (2026-08-12) |
 | 33 | **Modo solo asistencia + lista rápida de alumnos** (pedido 2026-10-20 para el tester que por ahora solo pasa lista): `UI.modo='asis'` (link `?modo=asistencia` o botón en Config; `applyMode`/`switchTab` esconden todo lo `.full-only` y redirigen pestañas ajenas a Asistencia; sin RPE ni tarjetas de pizarra); pestaña 👥 Alumnos (`renderAlumnos`): alta con nombre/apellido/año/categoría que recuerda año y categoría para el siguiente, búsqueda sin tildes, filtro por categoría, edición rápida `ovAlumno`; `nacimiento` acepta solo el año; `p.catId` fija la categoría (selector "Automática · X" + "➕ Nueva categoría…" también en el form completo); Asistencia pasa a ser la 1ª pestaña | HECHA (2026-10-20) |
+| 34 | **Elegir categoría visible + ícono en el teléfono** (audio del tester 2026-10-22): tarjeta "👥 ¿De qué categoría tomás lista?" arriba de Asistencia con chips grandes y conteo (`catChipsHtml`, también en Alumnos); los años de nacimiento sin categoría salen como chips y al tocarlos crean "Cat AAAA" (`catFromYear`); el botón de lista de HOY dice para quién es ("Solo Cat 2012 · 12 alumnos"). Tarjeta "📲 Tener la app con ícono" arriba de Asistencia (`installCardHtml`, se oculta con ✕ → `UI.installHide`): en iPhone, pasos cuenta → Compartir/Agregar a inicio → entrar con la misma cuenta; en Android, botón de instalar. El ícono abre en modo asistencia (`manifest-asis.webmanifest` con `start_url ./?modo=asistencia`, el `<link rel=manifest>` y la URL cambian con el modo). Aparato nuevo vacío ofrece "☁️ Entrar con mi cuenta"; arreglo: al bajar datos de la nube sin equipo activo se elige el primero (`syRefrescarPantalla`) | HECHA (2026-10-22) |
 
 Fuera de alcance: video-análisis y GPS (hardware/servicios pagos).
 

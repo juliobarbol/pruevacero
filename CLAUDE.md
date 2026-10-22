@@ -74,7 +74,8 @@ grep -n "===== js/" index.html
 | `js/photos.js` | IndexedDB de fotos, `savePhoto/getPhoto/deletePhoto`, `pickImage` (achica con canvas), `avatarHtml`, `teamLogoHtml` |
 | `js/ui.js` | tema, **modo solo asistencia** (`UI.modo='asis'`, `applyMode`, `setAppMode`, tarjeta `renderModoCard`; CSS `.full-only`/`.asis-only` sobre `body.modo-asis`), `switchTab` (acá se enganchan los render por pestaña; en modo asis redirige a `clases` todo lo que no esté en `ASIS_TABS`), overlays |
 | `js/teams.js` | equipos: alta/renombrar/borrar, selector, escudo |
-| `js/cats.js` | categorías por rango de años (`playerCat` — respeta el override `p.catId` —, `catLabelFor`) + días/hora de clase; selector de categoría compartido (`fillCatSelect`, `setPlayerCatChoice`, `catSelPicked` con "➕ Nueva categoría…") |
+| `js/cats.js` | categorías por rango de años (`playerCat` — respeta el override `p.catId` —, `catLabelFor`) + días/hora de clase; selector de categoría compartido (`fillCatSelect`, `setPlayerCatChoice`, `catSelPicked` con "➕ Nueva categoría…"); chips de categoría + años sueltos (`catChipsHtml`, `catFromYear` crea "Cat AAAA") usados en Asistencia y Alumnos |
+| `js/pwa.js` | instalar la app: tarjeta de Config (`refreshInstallCard`) y tarjeta visible arriba de Asistencia (`installCardHtml`; en iPhone la app del ícono tiene almacenamiento PROPIO → pasos con la cuenta de sync). En modo asistencia se usa `manifest-asis.webmanifest` (`start_url ./?modo=asistencia`) |
 | `js/players.js` | lista con filtros, ficha (`openFicha` arma TODAS las tarjetas), form, mover/exportar/importar jugador |
 | `js/goals.js` | lesiones (`p.lesiones`) y objetivos (`p.objetivos`) en la ficha: `renderLesionesCard`/`renderObjetivosCard`, alta/borrar/cumplir |
 | `js/pdf.js` | informes PDF (jsPDF): jugador (`exportPlayerPdf`), ejercicio (`exportExercisePdf`, cancha rasterizada con `pzBoardPng`, secuencia de pasos) y sesión (`exportSesionPdf`, bloques con miniaturas). Sin emojis dentro del PDF |

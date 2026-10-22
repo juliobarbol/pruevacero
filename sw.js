@@ -36,6 +36,7 @@ const SHELL_KEYS = ['./', './index.html'];
 // Recursos propios que no son el HTML: si alguno falla, la app igual abre.
 const EXTRA = [
   './manifest.webmanifest',
+  './manifest-asis.webmanifest',
   './icon-192.png',
   './icon-512.png',
   './icon-maskable.png'
