@@ -19,7 +19,7 @@
 // usuarios reciben la última versión sin bump manual.
 // ════════════════════════════════════════════════════════════════════
 
-const CACHE = 'pruevacero-20261020-192413';
+const CACHE = 'pruevacero-20261022-123440';
 
 // Cache APARTE para las librerías de CDN (Excel/PDF): NO lleva versión, así
 // sobrevive a las actualizaciones de la app y no hace falta internet de
