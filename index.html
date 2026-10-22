@@ -7304,7 +7304,12 @@ function installCardHtml(){
           '<a href="javascript:goSyncCard()" style="color:var(--accent)">Crear cuenta ☁️</a></li>') +
       '<li>En <b>Safari</b> tocá <b>Compartir</b> (el cuadradito con la flecha ↑, abajo) y elegí <b>“Agregar a pantalla de inicio”</b> → <b>Agregar</b>.</li>' +
       '<li>Abrí la app desde el ícono nuevo, tocá ⚙️ y <b>entrá con el mismo mail y contraseña</b>: aparecen todos tus alumnos.</li>' +
-    '</ol></div>';
+    '</ol>' +
+    // Plan B sin cuenta (si el servidor de cuentas no anda): copia por archivo
+    '<p class="hint" style="margin-top:6px"><b>Si la cuenta no se crea</b>, pasalos con un archivo: ' +
+    '<a href="javascript:exportBackup()" style="color:var(--accent)">⬇️ Descargar copia</a> acá en Safari; ' +
+    'después, en la app del ícono: ⚙️ → Copia de seguridad → ⬆️ Importar, y elegí el archivo ' +
+    '(está en la app Archivos → Descargas).</p></div>';
 }
 function goSyncCard(){
   switchTab('config');
@@ -7518,9 +7523,16 @@ function syMsgError(r){
   if (/email not confirmed/i.test(m))       return 'Falta confirmar el mail: buscá el mail de Supabase y tocá el enlace';
   if (/already registered/i.test(m))        return 'Ese mail ya tiene cuenta: entrá en vez de crearla';
   if (/password/i.test(m) && /least/i.test(m)) return 'La contraseña es muy corta (mínimo 6 caracteres)';
+  if (/email rate limit/i.test(m))          return 'Ya se mandaron varios mails de confirmación seguidos: esperá una hora y probá de nuevo (o tocá "Entrar" si ya confirmaste el mail)';
   if (/rate limit|too many/i.test(m))       return 'Demasiados intentos: esperá un rato';
+  // Sin respuesta o servidor caído/pausado (Supabase pausa los proyectos
+  // gratis sin uso; 540 = proyecto pausado)
+  if (!r.status || r.status >= 500)         return SY_MSG_SERVIDOR;
   return m || ('No se pudo conectar (error ' + r.status + ')');
 }
+const SY_MSG_SERVIDOR = 'El servidor de cuentas no responde (puede estar en pausa o sin señal). ' +
+  'Tus datos siguen guardados en este teléfono. Probá de nuevo más tarde; mientras tanto, para pasar ' +
+  'los datos a otro lado usá "Copia de seguridad" (más abajo).';
 
 /* ── Sincronizar ─────────────────────────────────────────────────── */
 function syncPronto(ms){                 // agrupa cambios seguidos en una sola subida
@@ -7735,23 +7747,43 @@ function syDatosForm(){
   if (!mail || !pass){ syMsgUi('Completá mail y contraseña', true); return null; }
   return { mail: mail, pass: pass };
 }
-async function syncUiEntrar(){
+// Entrar / crear cuenta desde la tarjeta. Nunca deja el mensaje "…" colgado:
+// si la red falla o se vence el timeout (fetch rechaza), se avisa. Los
+// botones se deshabilitan mientras tanto (evita el doble toque).
+let _syUiBusy = false;
+async function _syUiAccion(txtEspera, fn){
+  if (_syUiBusy) return;
   const d = syDatosForm(); if (!d) return;
-  syMsgUi('Entrando…');
-  const r = await syncEntrar(d.mail, d.pass);
-  if (!r.ok){ syMsgUi(r.msg, true); return; }
-  renderSyncCard();
-  toast('Listo, ya estás conectado');
-  syncNow(true);
+  _syUiBusy = true;
+  const btns = document.querySelectorAll('#syncCard button');
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+  syMsgUi(txtEspera + ' (puede tardar unos segundos)');
+  try { await fn(d); }
+  catch(e){ syMsgUi(navigator.onLine === false ? 'Sin conexión: probá cuando tengas señal' : SY_MSG_SERVIDOR, true); }
+  finally {
+    _syUiBusy = false;
+    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+  }
 }
-async function syncUiCrear(){
+function syncUiEntrar(){
+  return _syUiAccion('Entrando…', async d => {
+    const r = await syncEntrar(d.mail, d.pass);
+    if (!r.ok){ syMsgUi(r.msg, true); return; }
+    renderSyncCard();
+    toast('Listo, ya estás conectado');
+    syncNow(true);
+  });
+}
+function syncUiCrear(){
   const d = syDatosForm(); if (!d) return;
   if (d.pass.length < 6){ syMsgUi('La contraseña tiene que tener al menos 6 caracteres', true); return; }
-  syMsgUi('Creando la cuenta…');
-  const r = await syncCrearCuenta(d.mail, d.pass);
-  if (!r.ok){ syMsgUi(r.msg, true); return; }
-  if (r.entro){ renderSyncCard(); toast('Cuenta creada'); syncNow(true); return; }
-  syMsgUi('Cuenta creada. Te mandamos un mail para confirmarla: tocá el enlace y después entrá acá con "Entrar".');
+  return _syUiAccion('Creando la cuenta…', async d => {
+    const r = await syncCrearCuenta(d.mail, d.pass);
+    if (!r.ok){ syMsgUi(r.msg, true); return; }
+    if (r.entro){ renderSyncCard(); toast('Cuenta creada'); syncNow(true); return; }
+    syMsgUi('Cuenta creada. Te mandamos un mail para confirmarla (mirá también en Spam): tocá el enlace ' +
+      '(aunque la página que se abra dé error, la cuenta queda confirmada) y después volvé acá y tocá "Entrar".');
+  });
 }
 
 // Arranque: nunca bloquea. Se sincroniza un rato después de abrir, cuando

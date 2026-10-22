@@ -146,6 +146,12 @@ reales nunca resuelven** (no esperarlos en tests); IndexedDB tampoco anda en
 - Escapar TODO dato de usuario con `esc()` antes de meterlo en `innerHTML`.
 - La sincronización NO puede frenar nada: todas las llamadas con timeout,
   todo de fondo, y si falla se reintenta. Sin cuenta la app funciona igual.
+  Toda acción de UI que llame a la red tiene que capturar el rechazo de
+  `fetch` (red caída/timeout/servidor pausado) y avisar — ver `_syUiAccion`.
+- ⚠️ El proyecto Supabase es del plan gratis: se PAUSA tras ~7 días sin uso
+  y entonces crear cuenta/entrar/sincronizar falla. Se restaura desde
+  supabase.com (cuenta `juliobarribolbo+pruevacero@`, no es la del conector
+  MCP de esta sesión). El conector MCP conectado NO ve este proyecto.
 - Si se agrega una colección nueva a `S`, sumarla a `SY_COLS` (js/sync.js) o
   no se sincroniza. Tiene que ser una lista de objetos con `id`.
 - NUNCA agregar un tag de script externo (CDN) al `<head>`: bloquea
